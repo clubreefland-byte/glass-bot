@@ -51,17 +51,20 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 
     exact_mm = base_mm * factor
 
-    # Ограничения безопасности для открытых длинных аквариумов
-    if length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
-        exact_mm = 10.1  # Гарантированно выводит 120x45x45 и 120x50x50 на 12 мм
+    # Мастерские лимиты безопасности для открытых аквариумов
+    if height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
+        exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
+    elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
+        exact_mm = 10.1  # 100x50x50 и 120x50x50 -> 12 мм
+    elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
+        exact_mm = 10.1  # 120x45x45 -> 12 мм
     elif length_cm >= 150 and exact_mm < 12.1:
-        exact_mm = 12.1  # Выводит 150+ на 15 мм
+        exact_mm = 12.1  # 150+ -> 15 мм
 
     # Номиналы полированного стекла
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
-    # Допуск +0.05 мм исключает ложные завышения при ровных значениях (например, 10.0 мм -> 10 мм)
     for size in standard_sizes:
         if size + 0.05 >= exact_mm:
             recommended_size = size
