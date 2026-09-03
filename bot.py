@@ -60,6 +60,8 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
         exact_mm = 5.1  # Промежуточные до 36 см -> 6 мм
     elif length_cm == 60 and height_cm == 60:
         exact_mm = 10.0  # Куб 60x60x60 -> 10 мм
+    elif length_cm == 65 and height_cm == 65:
+        exact_mm = 12.0  # Куб 65x65x65 -> 12 мм
     elif length_cm == 70 and height_cm == 70:
         exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
     elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
@@ -90,7 +92,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `70 70 70` или `100 50 50`",
+        "Пример: `65 65 65` или `100 50 50`",
         parse_mode="Markdown"
     )
 
