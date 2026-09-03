@@ -11,7 +11,7 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO)
 
 # Токен безопасно забирается из Environment Variables в Render
-BOT_TOKEN = os.getenv("8981341931:AAHm-4nDSzBu7iRpbHj5-i2NLVMhtRxh2Vc")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
