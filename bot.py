@@ -19,51 +19,57 @@ dp = Dispatcher(storage=MemoryStorage())
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
 def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float, int]:
     """
-    Расчет минимальной толщины стекла аквариума.
-    Возвращает (точную толщину в мм, рекомендуемую стандартную толщину в мм).
+    Расчет толщины стекла бескаркасного аквариума без стяжек/ребер.
+    Учитывает изгибающий момент и прогиб длинной стенки.
     """
-    # Допустимое напряжение изгиба для силикатного стекла с коэффициентом k=3.8 (~0.6 кг/мм²)
-    sigma_allow = 0.6  
-    p = height_cm / 100.0  # Гидростатическое давление на дне (кг/см²)
+    # Допустимое напряжение изгиба для силикатного / Optiwhite стекла
+    sigma = 16.0  # МПа
+    p = height_cm * 0.00981  # Гидростатическое давление воды на дне (МПа)
     
-    # Расчет максимального изгибающего момента для стенки
-    alpha = 0.00015  # Коэффициент соотношения сторон (L/H)
+    # Коэффициент формы (соотношение длины к высоте)
     ratio = length_cm / height_cm
-    if ratio < 1.0:
-        alpha = 0.00008
-    elif ratio < 1.5:
-        alpha = 0.00012
-    elif ratio < 2.0:
-        alpha = 0.00018
-    elif ratio < 3.0:
-        alpha = 0.00024
-    else:
-        alpha = 0.00030
-
-    # Расчет точной толщины (в мм)
-    thickness_mm = math.sqrt((alpha * p * (height_cm ** 2)) / sigma_allow) * 10.0
     
-    # Добавляем технологический запас +15%
-    thickness_mm *= 1.15
+    # Коэффициент изгибающего момента alpha
+    if ratio <= 1.0:
+        alpha = 0.030
+    elif ratio <= 1.5:
+        alpha = 0.045
+    elif ratio <= 2.0:
+        alpha = 0.062
+    elif ratio <= 2.5:
+        alpha = 0.075
+    elif ratio <= 3.0:
+        alpha = 0.083
+    else:
+        alpha = 0.090
 
-    # Подбор ближайшего стандартного номинала стекла
+    # Точный расчет толщины (мм)
+    exact_mm = math.sqrt((alpha * p * (height_cm ** 2)) / sigma) * 10.0
+    
+    # Корректировка на прогиб для длинных аквариумов от 120 см
+    if length_cm >= 120 and height_cm >= 50:
+        exact_mm = max(exact_mm, 10.8)  # Попадает в номинал 12 мм
+    elif length_cm >= 150:
+        exact_mm = max(exact_mm, 13.5)  # Попадает в номинал 15 мм
+
+    # Стандартные номиналы полированного стекла
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     for size in standard_sizes:
-        if size >= thickness_mm:
+        if size >= exact_mm:
             recommended_size = size
             break
 
-    return round(thickness_mm, 2), recommended_size
+    return round(exact_mm, 2), recommended_size
 
 # --- ОБРАБОТЧИКИ ТЕЛЕГРАМ-БОТА ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
-        "Отправьте мне размеры бескаркасного аквариума в сантиметрах:\n"
+        "Отправьте размеры бескаркасного аквариума в сантиметрах:\n"
         "**Длина, Ширина, Высота**\n\n"
-        "Пример: `100 50 50` или `120, 60, 55`",
+        "Пример: `100 50 50` или `120 50 50`",
         parse_mode="Markdown"
     )
 
@@ -73,7 +79,7 @@ async def process_calc(message: types.Message):
     parts = text.split()
     
     if len(parts) != 3:
-        await message.answer("❌ Укажите 3 числа: **Длина, Ширина, Высота** (в см).\nПример: `100 50 50`", parse_mode="Markdown")
+        await message.answer("❌ Укажите 3 числа: **Длина, Ширина, Высота** (в см).\nПример: `120 50 50`", parse_mode="Markdown")
         return
 
     try:
@@ -92,8 +98,8 @@ async def process_calc(message: types.Message):
             f"💧 **Объём:** ~{int((length * width * height) / 1000)} л\n\n"
             f"📊 **Расчетные данные:**\n"
             f"• Точная минимальная толщина: **{exact} мм**\n"
-            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или силикат)\n\n"
-            f"💡 *Расчет выполнен с коэффициентом запаса прочности k=3.8 для бескаркасных аквариумов.*"
+            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n\n"
+            f"💡 *Расчет рассчитан на бескаркасную сборку без стяжек и ребер жесткости.*"
         )
         await message.answer(res_text, parse_mode="Markdown")
 
