@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramBadRequest
 from aiohttp import web
 
 # Логирование для отслеживания деплоя на Render
@@ -16,8 +17,49 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
+# ID или юзернейм вашего канала (обязательно с @)
+CHANNEL_USERNAME = "@club_reefland"
 
-# --- КЛАВИАТУРА С ССЫЛКОЙ НА КАНАЛ ---
+
+# --- ПРОВЕРКА ПОДПИСКИ НА КАНАЛ ---
+async def check_user_subscription(user_id: int) -> bool:
+    if not bot:
+        return True
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        # Статусы, при которых считается, что пользователь подписан
+        if member.status in ["creator", "administrator", "member"]:
+            return True
+        return False
+    except TelegramBadRequest:
+        # Если бот не админ в канале или произошла ошибка
+        logging.error("Не удалось проверить подписку. Убедитесь, что бот добавлен администратором в канал!")
+        return True  # Чтобы не блокировать работу при ошибке конфигурации, но лучше следить за правами
+    except Exception as e:
+        logging.error(f"Ошибка проверки подписки: {e}")
+        return True
+
+
+# --- КЛАВИАТУРЫ ---
+def get_subscribe_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📢 Подписаться на Reefland", 
+                    url="https://t.me/club_reefland"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Проверить подписку", 
+                    callback_data="check_sub"
+                )
+            ]
+        ]
+    )
+
+
 def get_channel_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -103,6 +145,18 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 # --- ОБРАБОТЧИКИ ТЕЛЕГРАМ-БОТА ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    user_id = message.from_user.id
+    
+    # Проверяем подписку
+    if not await check_user_subscription(user_id):
+        await message.answer(
+            "🔒 **Доступ ограничен!**\n\n"
+            "Чтобы пользоваться калькулятором толщины стекла, необходимо подписаться на наш канал **Аквариумная мастерская Reefland**.",
+            parse_mode="Markdown",
+            reply_markup=get_subscribe_keyboard()
+        )
+        return
+
     await message.answer(
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
@@ -113,8 +167,35 @@ async def cmd_start(message: types.Message):
     )
 
 
+@dp.callback_query(lambda c: c.data == "check_sub")
+async def process_check_sub(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    
+    if await check_user_subscription(user_id):
+        await callback.message.edit_text(
+            "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
+            "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
+            "**Длина Ширина Высота** (например: `100 50 50`)",
+            parse_mode="Markdown",
+            reply_markup=get_channel_keyboard()
+        )
+    else:
+        await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+
+
 @dp.message()
 async def process_calc(message: types.Message):
+    user_id = message.from_user.id
+    
+    # Проверяем подписку перед каждым расчетом
+    if not await check_user_subscription(user_id):
+        await message.answer(
+            "🔒 Чтобы рассчитать толщину стекла, пожалуйста, подпишитесь на наш канал.",
+            parse_mode="Markdown",
+            reply_markup=get_subscribe_keyboard()
+        )
+        return
+
     text = message.text.replace(",", " ").strip()
     parts = text.split()
 
