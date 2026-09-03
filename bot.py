@@ -4,6 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
 
 # Логирование для отслеживания деплоя на Render
@@ -14,6 +15,20 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
+
+
+# --- КЛАВИАТУРА С ССЫЛКОЙ НА КАНАЛ ---
+def get_channel_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📢 Аквариумная мастерская Reefland", 
+                    url="https://t.me/club_reefland"
+                )
+            ]
+        ]
+    )
 
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
@@ -92,8 +107,9 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `65 65 65` или `100 50 50`",
-        parse_mode="Markdown"
+        "Пример: `60 30 36` или `100 50 50`",
+        parse_mode="Markdown",
+        reply_markup=get_channel_keyboard()
     )
 
 
@@ -106,7 +122,8 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел: **Длина Ширина Высота** (в см).\n"
             "Пример: `120 50 50`",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=get_channel_keyboard()
         )
         return
 
@@ -129,7 +146,7 @@ async def process_calc(message: types.Message):
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n\n"
             f"💡 *Расчет выполнен с коэффициентом запаса k=3.8 для бескаркасных аквариумов без стяжек и ребер.*"
         )
-        await message.answer(res_text, parse_mode="Markdown")
+        await message.answer(res_text, parse_mode="Markdown", reply_markup=get_channel_keyboard())
 
     except ValueError:
         await message.answer("❌ Ошибка ввода. Используйте только числа.")
