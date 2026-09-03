@@ -28,6 +28,8 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
         base_mm = 5.0
     elif height_cm <= 40:
         base_mm = 6.5
+    elif height_cm <= 45:
+        base_mm = 7.3
     elif height_cm <= 50:
         base_mm = 8.2
     elif height_cm <= 60:
@@ -35,7 +37,7 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
     else:
         base_mm = height_cm * 0.22
 
-    # Множитель длины (учитывает изгибающий момент длинной стенки)
+    # Множитель длины (учитывает изгибающий момент)
     if ratio <= 1.2:
         factor = 0.9
     elif ratio <= 1.8:
@@ -49,17 +51,19 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 
     exact_mm = base_mm * factor
 
-    # Принудительные нормы безопасности для длинных открытых стекол
-    if length_cm >= 120 and exact_mm < 10.1:
-        exact_mm = 10.1  # Выводит на 12 мм
-    if length_cm >= 150 and exact_mm < 12.1:
-        exact_mm = 12.1  # Выводит на 15 мм
+    # Ограничения безопасности для открытых длинных аквариумов
+    if length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
+        exact_mm = 10.1  # Гарантированно выводит 120x45x45 и 120x50x50 на 12 мм
+    elif length_cm >= 150 and exact_mm < 12.1:
+        exact_mm = 12.1  # Выводит 150+ на 15 мм
 
     # Номиналы полированного стекла
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
+    
+    # Допуск +0.05 мм исключает ложные завышения при ровных значениях (например, 10.0 мм -> 10 мм)
     for size in standard_sizes:
-        if size >= exact_mm:
+        if size + 0.05 >= exact_mm:
             recommended_size = size
             break
 
@@ -73,7 +77,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `100 50 50` или `120 50 50`",
+        "Пример: `100 50 50` или `120 45 45`",
         parse_mode="Markdown"
     )
 
