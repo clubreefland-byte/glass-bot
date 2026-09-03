@@ -72,7 +72,7 @@ def get_channel_keyboard():
 
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
-def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float, int]:
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int]:
     """
     Инженерный расчет толщины стекла бескаркасного аквариума без стяжек и ребер.
     """
@@ -162,7 +162,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 60` или `100 50 50`",
+        "Пример: `120 50 50` или `120 50 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -176,7 +176,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `120 50 60`)",
+            "**Длина Ширина Высота** (например: `120 50 50`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -202,7 +202,7 @@ async def process_calc(message: types.Message):
     if len(parts) != 3:
         await message.answer(
             "❌ Укажите 3 числа через пробел: **Длина Ширина Высота** (в см).\n"
-            "Пример: `120 50 60`",
+            "Пример: `120 50 50`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -217,7 +217,7 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        exact, rec = calculate_glass_thickness(length, height)
+        exact, rec = calculate_glass_thickness(length, width, height)
 
         res_text = (
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
