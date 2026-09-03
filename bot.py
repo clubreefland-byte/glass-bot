@@ -27,14 +27,12 @@ async def check_user_subscription(user_id: int) -> bool:
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        # Статусы, при которых считается, что пользователь подписан
         if member.status in ["creator", "administrator", "member"]:
             return True
         return False
     except TelegramBadRequest:
-        # Если бот не админ в канале или произошла ошибка
         logging.error("Не удалось проверить подписку. Убедитесь, что бот добавлен администратором в канал!")
-        return True  # Чтобы не блокировать работу при ошибке конфигурации, но лучше следить за правами
+        return True 
     except Exception as e:
         logging.error(f"Ошибка проверки подписки: {e}")
         return True
@@ -121,6 +119,10 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
         exact_mm = 12.0  # Куб 65x65x65 -> 12 мм
     elif length_cm == 70 and height_cm == 70:
         exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
+    elif length_cm == 80 and height_cm == 80:
+        exact_mm = 15.0  # Куб 80x80x80 -> 15 мм
+    elif length_cm == 120 and width_cm == 50 and height_cm == 60:
+        exact_mm = 12.0  # 120x50x60 -> 12 мм
     elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
         exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
     elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
@@ -147,7 +149,6 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     
-    # Проверяем подписку
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 **Доступ ограничен!**\n\n"
@@ -161,7 +162,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `60 30 36` или `100 50 50`",
+        "Пример: `120 50 60` или `100 50 50`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -175,7 +176,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `100 50 50`)",
+            "**Длина Ширина Высота** (например: `120 50 60`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -187,7 +188,6 @@ async def process_check_sub(callback: types.CallbackQuery):
 async def process_calc(message: types.Message):
     user_id = message.from_user.id
     
-    # Проверяем подписку перед каждым расчетом
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 Чтобы рассчитать толщину стекла, пожалуйста, подпишитесь на наш канал.",
@@ -202,7 +202,7 @@ async def process_calc(message: types.Message):
     if len(parts) != 3:
         await message.answer(
             "❌ Укажите 3 числа через пробел: **Длина Ширина Высота** (в см).\n"
-            "Пример: `120 50 50`",
+            "Пример: `120 50 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
