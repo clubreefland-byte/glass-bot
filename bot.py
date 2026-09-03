@@ -25,9 +25,9 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 
     # Базовая толщина по высоте водного столба
     if height_cm <= 30:
-        base_mm = 3.8  # Гарантированно выводит на 4 мм стекло для кубиков до 30 см
+        base_mm = 3.8  
     elif height_cm <= 36:
-        base_mm = 5.0  # Для высоты 31-36 см держит 6 мм
+        base_mm = 5.0  
     elif height_cm <= 40:
         base_mm = 6.0
     elif height_cm <= 45:
@@ -55,9 +55,11 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 
     # Мастерские лимиты безопасности для открытых аквариумов
     if height_cm <= 30 and exact_mm <= 4.0:
-        exact_mm = 3.8  # Оставляет 30х30х30 на 4 мм
+        exact_mm = 3.8  # 30x30x30 -> 4 мм
     elif height_cm <= 36 and exact_mm <= 5.0:
-        exact_mm = 5.1  # Выводит промежуточные на 6 мм
+        exact_mm = 5.1  # Промежуточные до 36 см -> 6 мм
+    elif length_cm == 60 and height_cm == 60:
+        exact_mm = 10.0  # Куб 60x60x60 строго на 10 мм
     elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
         exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
     elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
@@ -86,7 +88,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `30 30 30` или `100 50 50`",
+        "Пример: `60 60 60` или `100 50 50`",
         parse_mode="Markdown"
     )
 
