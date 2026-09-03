@@ -121,8 +121,8 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
         exact_mm = 12.0  # Куб 65x65x65 -> 12 мм
     elif length_cm == 70 and height_cm == 70:
         exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
-    elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
-        exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
+    elif height_cm == 45 and 80 <= length_cm <= 100:
+        exact_mm = 9.1  # 80x45x45, 90x45x45, 100x45x45 -> ровно 10 мм
     elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
         exact_mm = 10.1  # 100x50x50 и 120x50x50 -> 12 мм
     elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
