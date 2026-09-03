@@ -25,7 +25,7 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
 
     # Базовая толщина по высоте водного столба
     if height_cm <= 36:
-        base_mm = 5.0  # Гарантированно выводит высоту до 36 см на 6 мм стекло
+        base_mm = 5.0  
     elif height_cm <= 40:
         base_mm = 6.0
     elif height_cm <= 45:
@@ -52,7 +52,9 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
     exact_mm = base_mm * factor
 
     # Мастерские лимиты безопасности для открытых аквариумов
-    if height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
+    if height_cm <= 36 and exact_mm <= 5.0:
+        exact_mm = 5.1  # Гарантированно выводит малые банки до 36 см высоты на 6 мм стекло
+    elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
         exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
     elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
         exact_mm = 10.1  # 100x50x50 и 120x50x50 -> 12 мм
