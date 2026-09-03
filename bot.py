@@ -1,7 +1,6 @@
 import asyncio
 import os
 import logging
-import math
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -17,43 +16,46 @@ bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА (DIN 32622) ---
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
 def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float, int]:
     """
-    Расчет точной толщины стекла для бескаркасного аквариума без стяжек и ребер.
-    Основан на коэффициентах изгибающего момента DIN 32622.
+    Инженерный расчет толщины стекла бескаркасного аквариума без стяжек и ребер.
     """
     ratio = length_cm / height_cm
 
-    # Табличные коэффициенты альфа по DIN 32622
-    if ratio <= 0.7:
-        alpha = 0.0008
-    elif ratio <= 1.0:
-        alpha = 0.0016
-    elif ratio <= 1.5:
-        alpha = 0.0026
-    elif ratio <= 2.0:
-        alpha = 0.0032
-    elif ratio <= 2.5:
-        alpha = 0.0037
-    elif ratio <= 3.0:
-        alpha = 0.0040
+    # Базовая толщина по высоте водного столба
+    if height_cm <= 30:
+        base_mm = 5.0
+    elif height_cm <= 40:
+        base_mm = 6.5
+    elif height_cm <= 50:
+        base_mm = 8.2
+    elif height_cm <= 60:
+        base_mm = 11.5
     else:
-        alpha = 0.0043
+        base_mm = height_cm * 0.22
 
-    # Допустимое напряжение изгиба sigma = 16.0 МПа (для M1 / Optiwhite с запасом k=3.8)
-    sigma_allow = 16.0
+    # Множитель длины (учитывает изгибающий момент длинной стенки)
+    if ratio <= 1.2:
+        factor = 0.9
+    elif ratio <= 1.8:
+        factor = 1.0
+    elif ratio <= 2.2:
+        factor = 1.08
+    elif ratio <= 2.6:
+        factor = 1.22
+    else:
+        factor = 1.35
 
-    # Точный расчет минимальной толщины (в мм)
-    exact_mm = math.sqrt((alpha * (height_cm ** 3) * 0.0981) / sigma_allow) * 10.0
+    exact_mm = base_mm * factor
 
-    # Безопасный порог для длинных бескаркасных стекол (защита от прогиба по центру)
+    # Принудительные нормы безопасности для длинных открытых стекол
     if length_cm >= 120 and exact_mm < 10.1:
-        exact_mm = 10.1  # Выводит на номинал 12 мм
-    elif length_cm >= 150 and exact_mm < 12.1:
-        exact_mm = 12.1  # Выводит на номинал 15 мм
+        exact_mm = 10.1  # Выводит на 12 мм
+    if length_cm >= 150 and exact_mm < 12.1:
+        exact_mm = 12.1  # Выводит на 15 мм
 
-    # Стандартная линейка полированного стекла
+    # Номиналы полированного стекла
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     for size in standard_sizes:
