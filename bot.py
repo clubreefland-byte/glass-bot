@@ -134,8 +134,11 @@ def calculate_glass_thickness(length_cm: float, height_cm: float) -> tuple[float
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
+    # Допуск превышения расчетной толщины над стандартным листом
+    tolerance = 0.5
+    
     for size in standard_sizes:
-        if size + 0.05 >= exact_mm:
+        if size + tolerance >= exact_mm:
             recommended_size = size
             break
 
