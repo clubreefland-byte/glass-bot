@@ -78,8 +78,8 @@ def get_channel_keyboard():
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int]:
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float]:
     ratio = length_cm / height_cm
 
     if height_cm <= 30:
@@ -118,7 +118,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 36 and exact_mm <= 5.0:
         exact_mm = 5.1  
     elif length_cm == 60 and height_cm == 60:
-        exact_mm = 10.0  
+        exact_mm = 10.0  # Куб 60x60x60 -> 10 мм
+    elif length_cm == 65 and height_cm == 60:
+        exact_mm = 11.8  # 65x60x60 -> 12 мм
     elif length_cm == 65 and height_cm == 65:
         exact_mm = 12.0  
     elif length_cm == 70 and height_cm == 70:
@@ -148,7 +150,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    return round(exact_mm, 2), recommended_size
+    # Расчет фактического коэффициента запаса прочности k для рекомендуемого стекла
+    # Базовый k=3.8 соответствует минимальной расчетной толщине exact_mm
+    safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
+
+    return round(exact_mm, 2), recommended_size, safety_factor
 
 
 # --- ХЕНДЛЕРЫ ---
@@ -168,7 +174,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 60` или `100 100 20`",
+        "Пример: `120 50 60` или `65 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -181,7 +187,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `100 100 20`)",
+            "**Длина Ширина Высота** (например: `65 60 60`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -200,7 +206,7 @@ async def process_calc(message: types.Message):
         )
         return
 
-    text = message.text.replace(",", " ").strip()
+    text = message.text.replace(",", " ").replace("х", " ").replace("x", " ").replace("мм", "").strip()
     parts = text.split()
 
     if len(parts) != 3:
@@ -217,19 +223,25 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
+        # Авто-перевод из мм в см
+        if length > 250 or width > 250 or height > 250:
+            length /= 10
+            width /= 10
+            height /= 10
+
         if length <= 0 or width <= 0 or height <= 0:
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        exact, rec = calculate_glass_thickness(length, width, height)
+        exact, rec, safety_factor = calculate_glass_thickness(length, width, height)
 
         res_text = (
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
             f"💧 **Объём:** ~{int((length * width * height) / 1000)} л\n\n"
             f"📊 **Расчетные данные:**\n"
-            f"• Точная минимальная толщина: **{exact} мм**\n"
-            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n\n"
-            f"💡 *Расчет выполнен с коэффициентом запаса k=3.8 для бескаркасных аквариумов без стяжек и ребер.*"
+            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
+            f"• Расчетный запас прочности: **k = {safety_factor}**\n\n"
+            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов без стяжек и ребер жесткости.*"
         )
         await message.answer(res_text, parse_mode="Markdown", reply_markup=get_channel_keyboard())
 
