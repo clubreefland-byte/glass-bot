@@ -84,7 +84,7 @@ def get_channel_keyboard():
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float]:
-    # Расчет базовой толщины в зависимости от высоты и длины
+    # Расчет базовой толщины в зависимости от высоты
     if height_cm <= 30:
         base_mm = 3.8
     elif height_cm <= 36:
@@ -115,30 +115,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     exact_mm = base_mm * factor
 
-    # Мастерские лимиты безопасности для специфических габаритов
-    if length_cm >= 75 and height_cm >= 45 and exact_mm < 8.1:
-        exact_mm = 8.1  # От 75х45х45 см и выше -> строго 10 мм
-    elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and exact_mm < 9.8:
-        exact_mm = 9.8  # Мелкие широкие фраговики/поддоны -> 10 мм
-    elif height_cm <= 30 and exact_mm <= 4.0:
-        exact_mm = 3.8  
-    elif height_cm <= 36 and exact_mm <= 5.0:
-        exact_mm = 5.1  
-    elif length_cm >= 70 and height_cm >= 60 and exact_mm < 10.1:
-        exact_mm = 10.2  # 70х60х60 см и выше -> строго 12 мм
-    elif length_cm == 65 and height_cm == 65:
-        exact_mm = 11.8  
-    elif length_cm == 70 and height_cm == 70:
-        exact_mm = 12.0  
-    elif length_cm == 80 and height_cm == 80:
-        exact_mm = 15.0  
-    elif length_cm <= 110 and height_cm == 55:
-        exact_mm = 11.8
-    elif 100 <= length_cm <= 120 and height_cm == 60:
-        exact_mm = 12.0
-    elif length_cm <= 110 and height_cm == 70:
-        exact_mm = 14.8
-
+    # Подбор ближайшего стандартного толщинного ряда
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
@@ -147,7 +124,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Расчет фактического коэффициента запаса прочности k
+    # Пороги мастерской (поднимают итоговый номинал, не искажая расчетное exact_mm)
+    if length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
+        recommended_size = 10
+    elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
+        recommended_size = 10
+    elif length_cm >= 70 and height_cm >= 60 and recommended_size < 12:
+        recommended_size = 12
+
+    # Расчет реального коэффициента запаса прочности k от истинного напряжения
     safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor
@@ -170,7 +155,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `80 45 45` или `800х450х450`",
+        "Пример: `90 45 45` или `900х450х450`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -183,7 +168,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума:\n"
-            "**Длина Ширина Высота** (например: `800х450х450` или `80 45 45`)",
+            "**Длина Ширина Высота** (например: `900х450х450` или `90 45 45`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -202,7 +187,7 @@ async def process_calc(message: types.Message):
         )
         return
 
-    # Очистка текста
+    # Предварительная очистка текста
     text = message.text.lower().replace(",", ".").replace("х", " ").replace("x", " ").replace("*", " ").replace("мм", "").strip()
     parts = text.split()
 
@@ -210,7 +195,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел или «х»:\n"
             "**Длина Ширина Высота**\n"
-            "Пример: `800х450х450` или `80 45 45`",
+            "Пример: `900х450х450` или `90 45 45`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -221,7 +206,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Перевод миллиметров в сантиметры, если любая из величин больше 200
+        # Автоматический перевод из миллиметров в сантиметры
         if length > 200 or width > 200 or height > 200:
             length /= 10.0
             width /= 10.0
@@ -236,7 +221,7 @@ async def process_calc(message: types.Message):
         # Расчет основных параметров
         volume_l = int((length * width * height) / 1000)
         
-        # Площадь стенок в м2
+        # Площадь стенок в м2 (дно + 2 длинные + 2 короткие)
         area_m2 = ((length * width) + 2 * (length * height) + 2 * (width * height)) / 10000.0
         # Вес стекла (2.5 кг на м2 на 1 мм толщины)
         glass_weight_kg = round(area_m2 * rec * 2.5, 1)
