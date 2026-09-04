@@ -125,12 +125,14 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             break
 
     # Пороги мастерской (поднимают итоговый номинал, не искажая расчетное exact_mm)
-    if length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
-        recommended_size = 10
+    if length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
+        recommended_size = 12  # Для длинных бескаркасников от 110 см -> 12 мм
+    elif length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
+        recommended_size = 10  # От 75х45х45 см -> 10 мм
     elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
-        recommended_size = 10
+        recommended_size = 10  # Мелкие широкие фраговики/поддоны -> 10 мм
     elif length_cm >= 70 and height_cm >= 60 and recommended_size < 12:
-        recommended_size = 12
+        recommended_size = 12  # От 70х60х60 см -> 12 мм
 
     # Расчет реального коэффициента запаса прочности k от истинного напряжения
     safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
@@ -155,7 +157,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `90 45 45` или `900х450х450`",
+        "Пример: `1200х450х450` или `120 45 45`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -168,7 +170,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума:\n"
-            "**Длина Ширина Высота** (например: `900х450х450` или `90 45 45`)",
+            "**Длина Ширина Высота** (например: `1200х450х450` или `120 45 45`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -195,7 +197,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел или «х»:\n"
             "**Длина Ширина Высота**\n"
-            "Пример: `900х450х450` или `90 45 45`",
+            "Пример: `1200х450х450` или `120 45 45`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
