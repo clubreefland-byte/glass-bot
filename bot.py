@@ -96,7 +96,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 50:
         base_mm = 8.2
     elif height_cm <= 60:
-        # Для высоты 60 см: от 70 см длины гарантированно переходим на 12 мм стекло
         base_mm = 9.2 + (length_cm - 60) * 0.08
     else:
         base_mm = height_cm * 0.22
@@ -117,8 +116,8 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     exact_mm = base_mm * factor
 
     # Мастерские лимиты безопасности для специфических габаритов
-    if length_cm >= 90 and height_cm >= 45 and exact_mm < 8.1:
-        exact_mm = 8.1  # Гарантированный вывод 10 мм для 90х45х45 см и выше
+    if length_cm >= 75 and height_cm >= 45 and exact_mm < 8.1:
+        exact_mm = 8.1  # От 75х45х45 см и выше -> строго 10 мм
     elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and exact_mm < 9.8:
         exact_mm = 9.8  # Мелкие широкие фраговики/поддоны -> 10 мм
     elif height_cm <= 30 and exact_mm <= 4.0:
@@ -171,7 +170,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `90 45 45` или `900х450х450`",
+        "Пример: `80 45 45` или `800х450х450`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -184,7 +183,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума:\n"
-            "**Длина Ширина Высота** (например: `900х450х450` или `90 45 45`)",
+            "**Длина Ширина Высота** (например: `800х450х450` или `80 45 45`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -203,7 +202,7 @@ async def process_calc(message: types.Message):
         )
         return
 
-    # Предварительная очистка текста от букв "х", "x", точек, запятых и "мм"
+    # Очистка текста
     text = message.text.lower().replace(",", ".").replace("х", " ").replace("x", " ").replace("*", " ").replace("мм", "").strip()
     parts = text.split()
 
@@ -211,7 +210,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел или «х»:\n"
             "**Длина Ширина Высота**\n"
-            "Пример: `900х450х450` или `90 45 45`",
+            "Пример: `800х450х450` или `80 45 45`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -237,7 +236,7 @@ async def process_calc(message: types.Message):
         # Расчет основных параметров
         volume_l = int((length * width * height) / 1000)
         
-        # Площадь стенок в м2 (дно + 2 длинные + 2 короткие)
+        # Площадь стенок в м2
         area_m2 = ((length * width) + 2 * (length * height) + 2 * (width * height)) / 10000.0
         # Вес стекла (2.5 кг на м2 на 1 мм толщины)
         glass_weight_kg = round(area_m2 * rec * 2.5, 1)
