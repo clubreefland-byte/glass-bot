@@ -38,7 +38,7 @@ async def check_user_subscription(user_id: int) -> bool:
             return True
         return False
     except TelegramBadRequest:
-        logging.error("Не удалось проверить подписку. Убедитесь, что бот добавлен администратором в канал!")
+        logging.error("Не удалось проверить подписку.")
         return True 
     except Exception as e:
         logging.error(f"Ошибка проверки подписки: {e}")
@@ -83,39 +83,44 @@ def get_channel_keyboard():
 
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float]:
-    # Расчет базовой толщины в зависимости от высоты
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
+    # 1. Расчет напряжений на основе гидростатического давления
+    # Базовое изгибающее напряжение зависит от высоты столба воды
     if height_cm <= 30:
         base_mm = 3.8
-    elif height_cm <= 36:
-        base_mm = 5.0
+    elif height_cm <= 35:
+        base_mm = 4.8
     elif height_cm <= 40:
-        base_mm = 6.0
+        base_mm = 5.8
     elif height_cm <= 45:
-        base_mm = 7.3
+        base_mm = 6.8
     elif height_cm <= 50:
-        base_mm = 8.2
+        base_mm = 7.8
+    elif height_cm <= 55:
+        base_mm = 8.9
     elif height_cm <= 60:
-        base_mm = 9.2 + (length_cm - 60) * 0.08
+        base_mm = 10.0
+    elif height_cm <= 70:
+        base_mm = 12.5
     else:
-        base_mm = height_cm * 0.22
+        base_mm = height_cm * 0.20
 
-    # Поправочный коэффициент формы (отношение длины к высоте)
+    # 2. Поправочный коэффициент длины (плавный рост для длинных банок)
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
-    elif ratio <= 1.2:
-        factor = 0.92 + (ratio - 1.0) * 0.15
-    elif ratio <= 1.8:
-        factor = 0.95 + (ratio - 1.2) * 0.16
-    elif ratio <= 2.2:
-        factor = 1.05 + (ratio - 1.8) * 0.15
+    elif ratio <= 1.5:
+        factor = 0.92 + (ratio - 1.0) * 0.12
+    elif ratio <= 2.0:
+        factor = 0.98 + (ratio - 1.5) * 0.14
+    elif ratio <= 2.5:
+        factor = 1.05 + (ratio - 2.0) * 0.12
     else:
-        factor = 1.15 + (ratio - 2.2) * 0.20
+        factor = 1.11 + (ratio - 2.5) * 0.08
 
     exact_mm = base_mm * factor
 
-    # Подбор ближайшего стандартного толщинного ряда
+    # 3. Подбор стандартного номинала
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
@@ -124,20 +129,27 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Пороги мастерской (поднимают итоговый номинал, не искажая расчетное exact_mm)
-    if length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
-        recommended_size = 12  # Для длинных бескаркасников от 110 см -> 12 мм
+    # 4. Пороги мастерской для открытых бескаркасных аквариумов
+    if length_cm >= 140 and height_cm >= 50 and recommended_size < 15:
+        recommended_size = 15  # От 140х50х50 см для открытого бескаркасника — 15 мм
+    elif length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
+        recommended_size = 12  # От 110х45х45 см — 12 мм
     elif length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
-        recommended_size = 10  # От 75х45х45 см -> 10 мм
+        recommended_size = 10  # От 75х45х45 см — 10 мм
     elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
-        recommended_size = 10  # Мелкие широкие фраговики/поддоны -> 10 мм
-    elif length_cm >= 70 and height_cm >= 60 and recommended_size < 12:
-        recommended_size = 12  # От 70х60х60 см -> 12 мм
+        recommended_size = 10
 
-    # Расчет реального коэффициента запаса прочности k от истинного напряжения
+    # 5. Рекомендации по усиливающим элементам
+    bracing_text = "Не требуются"
+    if length_cm >= 150 and recommended_size < 15:
+        bracing_text = "Рекомендуются рёбра жесткости (или сборка из 15 мм без рёбер)"
+    elif length_cm >= 180:
+        bracing_text = "Требуются рёбра жесткости и продольная стяжка"
+
+    # 6. Запас прочности k
     safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
-    return round(exact_mm, 2), recommended_size, safety_factor
+    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
 
 # --- ХЕНДЛЕРЫ ---
@@ -157,7 +169,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `1200х450х450` или `120 45 45`",
+        "Пример: `1500х600х600` или `150 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -170,7 +182,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума:\n"
-            "**Длина Ширина Высота** (например: `1200х450х450` или `120 45 45`)",
+            "**Длина Ширина Высота** (например: `1500х600х600` или `150 60 60`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -189,7 +201,6 @@ async def process_calc(message: types.Message):
         )
         return
 
-    # Предварительная очистка текста
     text = message.text.lower().replace(",", ".").replace("х", " ").replace("x", " ").replace("*", " ").replace("мм", "").strip()
     parts = text.split()
 
@@ -197,7 +208,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел или «х»:\n"
             "**Длина Ширина Высота**\n"
-            "Пример: `1200х450х450` или `120 45 45`",
+            "Пример: `1500х600х600` или `150 60 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -208,7 +219,6 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоматический перевод из миллиметров в сантиметры
         if length > 200 or width > 200 or height > 200:
             length /= 10.0
             width /= 10.0
@@ -218,18 +228,14 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        exact, rec, safety_factor = calculate_glass_thickness(length, width, height)
+        exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
 
-        # Расчет основных параметров
         volume_l = int((length * width * height) / 1000)
         
-        # Площадь стенок в м2 (дно + 2 длинные + 2 короткие)
         area_m2 = ((length * width) + 2 * (length * height) + 2 * (width * height)) / 10000.0
-        # Вес стекла (2.5 кг на м2 на 1 мм толщины)
         glass_weight_kg = round(area_m2 * rec * 2.5, 1)
         total_weight_kg = int(glass_weight_kg + volume_l)
 
-        # Ориентировочная масса грунта при слое 5 см
         bottom_area_m2 = round((length * width) / 10000.0, 2)
         ground_weight_kg = round(((length * width * 5) / 1000) * 1.5)
 
@@ -239,7 +245,7 @@ async def process_calc(message: types.Message):
             f"📊 **Расчетные данные:**\n"
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
             f"• Запас прочности: **k = {safety_factor}**\n"
-            f"• Рёбра и стяжки: **Не требуются**\n\n"
+            f"• Рёбра и стяжки: **{bracing_text}**\n\n"
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
