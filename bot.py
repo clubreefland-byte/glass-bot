@@ -6,18 +6,27 @@ from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-# Логирование для отслеживания деплоя на Render
+# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Токен бота из Environment Variables
+# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Render автоматически прокидывает имя вашего сервиса в RENDER_EXTERNAL_URL
+# Или укажите свою ссылку вручную, например: "https://your-bot-name.onrender.com"
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+
+# Настройки для Webhook
+WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
+WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
+
+PORT = int(os.getenv("PORT", 10000))
 
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
-# ID или юзернейм вашего канала (обязательно с @)
 CHANNEL_USERNAME = "@club_reefland"
 
 
@@ -73,12 +82,8 @@ def get_channel_keyboard():
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int]:
-    """
-    Инженерный расчет толщины стекла бескаркасного аквариума без стяжек и ребер.
-    """
     ratio = length_cm / height_cm
 
-    # Базовая толщина по высоте водного столба
     if height_cm <= 30:
         base_mm = 3.8  
     elif height_cm <= 36:
@@ -94,7 +99,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         base_mm = height_cm * 0.22
 
-    # Множитель длины (учитывает изгибающий момент)
     if ratio <= 1.2:
         factor = 0.9
     elif ratio <= 1.8:
@@ -108,31 +112,29 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     exact_mm = base_mm * factor
 
-    # Мастерские лимиты безопасности для открытых аквариумов
     if height_cm <= 30 and exact_mm <= 4.0:
-        exact_mm = 3.8  # 30x30x30 -> 4 мм
+        exact_mm = 3.8  
     elif height_cm <= 36 and exact_mm <= 5.0:
-        exact_mm = 5.1  # Промежуточные до 36 см -> 6 мм
+        exact_mm = 5.1  
     elif length_cm == 60 and height_cm == 60:
-        exact_mm = 10.0  # Куб 60x60x60 -> 10 мм
+        exact_mm = 10.0  
     elif length_cm == 65 and height_cm == 65:
-        exact_mm = 12.0  # Куб 65x65x65 -> 12 мм
+        exact_mm = 12.0  
     elif length_cm == 70 and height_cm == 70:
-        exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
+        exact_mm = 12.0  
     elif length_cm == 80 and height_cm == 80:
-        exact_mm = 15.0  # Куб 80x80x80 -> 15 мм
+        exact_mm = 15.0  
     elif length_cm == 120 and width_cm == 50 and height_cm == 60:
-        exact_mm = 12.0  # 120x50x60 -> 12 мм
+        exact_mm = 12.0  
     elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
-        exact_mm = 8.1  # 80x45x45, 90x45x45, 100x45x45 -> 10 мм
+        exact_mm = 8.1  
     elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
-        exact_mm = 10.1  # 100x50x50 и 120x50x50 -> 12 мм
+        exact_mm = 10.1  
     elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
-        exact_mm = 10.1  # 120x45x45 -> 12 мм
+        exact_mm = 10.1  
     elif length_cm >= 150 and exact_mm < 12.1:
-        exact_mm = 12.1  # 150+ -> 15 мм
+        exact_mm = 12.1  
 
-    # Номиналы полированного стекла
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
@@ -144,11 +146,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     return round(exact_mm, 2), recommended_size
 
 
-# --- ОБРАБОТЧИКИ ТЕЛЕГРАМ-БОТА ---
+# --- ХЕНДЛЕРЫ ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 **Доступ ограничен!**\n\n"
@@ -162,7 +163,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 50` или `120 50 60`",
+        "Пример: `120 50 50` или `80 80 80`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -171,7 +172,6 @@ async def cmd_start(message: types.Message):
 @dp.callback_query(lambda c: c.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    
     if await check_user_subscription(user_id):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
@@ -187,7 +187,6 @@ async def process_check_sub(callback: types.CallbackQuery):
 @dp.message()
 async def process_calc(message: types.Message):
     user_id = message.from_user.id
-    
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 Чтобы рассчитать толщину стекла, пожалуйста, подпишитесь на наш канал.",
@@ -233,30 +232,42 @@ async def process_calc(message: types.Message):
         await message.answer("❌ Ошибка ввода. Используйте только числа.")
 
 
-# --- ВЕБ-СЕРВЕР HEALTH CHECK ДЛЯ RENDER ---
+# --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ НА WEBHOOK ---
+async def on_startup(app: web.Application):
+    if bot and WEBHOOK_URL:
+        # Устанавливаем вебхук в Telegram
+        await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
+        logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
+    else:
+        logging.warning("WEBHOOK_URL не задан или бот не инициализирован!")
+
+
 async def handle_ping(request):
     return web.Response(text="OK", status=200)
 
 
-async def start_web_server():
+def main():
+    if not BOT_TOKEN:
+        logging.error("ОШИБКА: BOT_TOKEN не задан!")
+        return
+
     app = web.Application()
     app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.getenv("PORT", 10000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logging.info(f"Health-check веб-сервер запущен на порту {port}")
 
+    # Регистрация вебхука от aiogram в aiohttp
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    )
+    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
 
-async def main():
-    await start_web_server()
-    if bot:
-        logging.info("Бот калькулятора запущен и готов к работе!")
-        await dp.start_polling(bot)
-    else:
-        logging.error("ОШИБКА: BOT_TOKEN не задан в Environment Variables!")
+    # Настройка приложения
+    setup_application(app, dp, bot=bot)
+    app.on_startup.append(on_startup)
+
+    logging.info(f"Запуск веб-сервера на порту {PORT}...")
+    web.run_app(app, host="0.0.0.0", port=PORT)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
