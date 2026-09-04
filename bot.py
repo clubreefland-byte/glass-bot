@@ -92,7 +92,8 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 50:
         base_mm = 8.2
     elif height_cm <= 60:
-        base_mm = 9.2 + (length_cm - 60) * 0.06
+        # Для высоты 60 см: от 70 см длины гарантированно переходим на 12 мм стекло
+        base_mm = 9.2 + (length_cm - 60) * 0.08
     else:
         base_mm = height_cm * 0.22
 
@@ -118,8 +119,8 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         exact_mm = 3.8  
     elif height_cm <= 36 and exact_mm <= 5.0:
         exact_mm = 5.1  
-    elif length_cm >= 75 and height_cm == 60 and exact_mm < 10.1:
-        exact_mm = 10.2  # 75х60х60 и выше -> строго 12 мм
+    elif length_cm >= 70 and height_cm >= 60 and exact_mm < 10.1:
+        exact_mm = 10.2  # 70х60х60 см и выше -> строго 12 мм
     elif length_cm == 65 and height_cm == 65:
         exact_mm = 11.8  
     elif length_cm == 70 and height_cm == 70:
@@ -164,7 +165,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 60` или `75 60 60`",
+        "Пример: `120 50 60` или `70 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -177,7 +178,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `75 60 60`)",
+            "**Длина Ширина Высота** (например: `70 60 60`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -213,7 +214,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоматический перевод из мм в см
+        # Автоматический перевод из миллиметров в сантиметры
         if length > 250 or width > 250 or height > 250:
             length /= 10
             width /= 10
