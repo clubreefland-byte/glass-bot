@@ -80,12 +80,11 @@ def get_channel_keyboard():
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float]:
-    ratio = length_cm / height_cm
-
+    # Расчет базовой толщины в зависимости от высоты и длины
     if height_cm <= 30:
-        base_mm = 3.8  
+        base_mm = 3.8
     elif height_cm <= 36:
-        base_mm = 5.0  
+        base_mm = 5.0
     elif height_cm <= 40:
         base_mm = 6.0
     elif height_cm <= 45:
@@ -93,52 +92,45 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 50:
         base_mm = 8.2
     elif height_cm <= 60:
-        base_mm = 11.5
+        # Для высоты 60 см: при длинах 60-75 см толщина попадает в диапазон 9.0-9.8 мм (10 мм стекло)
+        base_mm = 9.2 + (length_cm - 60) * 0.03
     else:
         base_mm = height_cm * 0.22
 
-    if ratio <= 1.2:
-        factor = 0.9
+    # Поправочный коэффициент формы (отношение длины к высоте)
+    ratio = length_cm / height_cm
+    if ratio <= 1.0:
+        factor = 0.90
+    elif ratio <= 1.2:
+        factor = 0.92 + (ratio - 1.0) * 0.15
     elif ratio <= 1.8:
-        factor = 1.0
+        factor = 0.95 + (ratio - 1.2) * 0.16
     elif ratio <= 2.2:
-        factor = 1.08
-    elif ratio <= 2.6:
-        factor = 1.22
+        factor = 1.05 + (ratio - 1.8) * 0.15
     else:
-        factor = 1.35
+        factor = 1.15 + (ratio - 2.2) * 0.20
 
     exact_mm = base_mm * factor
 
-    # Мастерские лимиты безопасности для открытых аквариумов
+    # Мастерские лимиты безопасности для специфических габаритов
     if height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and exact_mm < 9.8:
         exact_mm = 9.8  # Мелкие широкие фраговики/поддоны -> 10 мм
     elif height_cm <= 30 and exact_mm <= 4.0:
         exact_mm = 3.8  
     elif height_cm <= 36 and exact_mm <= 5.0:
         exact_mm = 5.1  
-    elif length_cm == 60 and height_cm == 60:
-        exact_mm = 10.0  # Куб 60x60x60 -> 10 мм
     elif length_cm == 65 and height_cm == 65:
-        exact_mm = 12.0  
+        exact_mm = 11.8  # Куб 65x65x65 -> 12 мм
     elif length_cm == 70 and height_cm == 70:
-        exact_mm = 12.0  
+        exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
     elif length_cm == 80 and height_cm == 80:
-        exact_mm = 15.0  
+        exact_mm = 15.0  # Куб 80x80x80 -> 15 мм
     elif length_cm <= 110 and height_cm == 55:
-        exact_mm = 11.8  # 100x55x55 и 110x55x55 -> 12 мм
+        exact_mm = 11.8
     elif 100 <= length_cm <= 120 and height_cm == 60:
-        exact_mm = 12.0  # 100x60x60, 110x60x60, 120x60x60 -> 12 мм
+        exact_mm = 12.0
     elif length_cm <= 110 and height_cm == 70:
-        exact_mm = 14.8  # 100x70x70 и 110x70x70 -> 15 мм
-    elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
-        exact_mm = 8.1  
-    elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1 and height_cm < 55:
-        exact_mm = 10.1  
-    elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1 and height_cm < 55:
-        exact_mm = 10.1  
-    elif length_cm >= 150 and exact_mm < 12.1:
-        exact_mm = 12.1  
+        exact_mm = 14.8
 
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
@@ -148,7 +140,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Расчет фактического коэффициента запаса прочности k для рекомендуемого стекла
+    # Расчет фактического коэффициента запаса прочности k
     safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor
@@ -203,6 +195,7 @@ async def process_calc(message: types.Message):
         )
         return
 
+    # Очистка и разбор введенной строки
     text = message.text.replace(",", " ").replace("х", " ").replace("x", " ").replace("мм", "").strip()
     parts = text.split()
 
@@ -220,7 +213,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоматическая обработка ввода в мм
+        # Автоматический перевод из миллиметров в сантиметры
         if length > 250 or width > 250 or height > 250:
             length /= 10
             width /= 10
