@@ -75,7 +75,7 @@ def get_channel_keyboard():
                 ),
                 InlineKeyboardButton(
                     text="💬 Заказать / Консультация", 
-                    url="https://t.me/club_reefland"  # При необходимости укажите прямой контакт мастера
+                    url="https://t.me/Asteriy78"
                 )
             ]
         ]
