@@ -92,8 +92,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 50:
         base_mm = 8.2
     elif height_cm <= 60:
-        # Для высоты 60 см: при длинах 60-75 см толщина попадает в диапазон 9.0-9.8 мм (10 мм стекло)
-        base_mm = 9.2 + (length_cm - 60) * 0.03
+        base_mm = 9.2 + (length_cm - 60) * 0.06
     else:
         base_mm = height_cm * 0.22
 
@@ -119,12 +118,14 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         exact_mm = 3.8  
     elif height_cm <= 36 and exact_mm <= 5.0:
         exact_mm = 5.1  
+    elif length_cm >= 75 and height_cm == 60 and exact_mm < 10.1:
+        exact_mm = 10.2  # 75х60х60 и выше -> строго 12 мм
     elif length_cm == 65 and height_cm == 65:
-        exact_mm = 11.8  # Куб 65x65x65 -> 12 мм
+        exact_mm = 11.8  
     elif length_cm == 70 and height_cm == 70:
-        exact_mm = 12.0  # Куб 70x70x70 -> 12 мм
+        exact_mm = 12.0  
     elif length_cm == 80 and height_cm == 80:
-        exact_mm = 15.0  # Куб 80x80x80 -> 15 мм
+        exact_mm = 15.0  
     elif length_cm <= 110 and height_cm == 55:
         exact_mm = 11.8
     elif 100 <= length_cm <= 120 and height_cm == 60:
@@ -163,7 +164,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 60` или `65 60 60`",
+        "Пример: `120 50 60` или `75 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -176,7 +177,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `65 60 60`)",
+            "**Длина Ширина Высота** (например: `75 60 60`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -195,7 +196,6 @@ async def process_calc(message: types.Message):
         )
         return
 
-    # Очистка и разбор введенной строки
     text = message.text.replace(",", " ").replace("х", " ").replace("x", " ").replace("мм", "").strip()
     parts = text.split()
 
@@ -213,7 +213,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоматический перевод из миллиметров в сантиметры
+        # Автоматический перевод из мм в см
         if length > 250 or width > 250 or height > 250:
             length /= 10
             width /= 10
