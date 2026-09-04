@@ -70,8 +70,12 @@ def get_channel_keyboard():
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📢 Аквариумная мастерская Reefland", 
+                    text="📢 Канал Reefland", 
                     url="https://t.me/club_reefland"
+                ),
+                InlineKeyboardButton(
+                    text="💬 Заказать / Консультация", 
+                    url="https://t.me/club_reefland"  # При необходимости укажите прямой контакт мастера
                 )
             ]
         ]
@@ -226,13 +230,33 @@ async def process_calc(message: types.Message):
 
         exact, rec, safety_factor = calculate_glass_thickness(length, width, height)
 
+        # Расчет дополнительных параметров
+        volume_l = int((length * width * height) / 1000)
+        
+        # Площадь стенок в м2 (дно + 2 длинные + 2 короткие)
+        area_m2 = ((length * width) + 2 * (length * height) + 2 * (width * height)) / 10000.0
+        # Ориентировочный вес стекла (2.5 кг на м2 на 1 мм толщины)
+        glass_weight_kg = round(area_m2 * rec * 2.5, 1)
+        total_weight_kg = int(glass_weight_kg + volume_l)
+
+        # Ориентировочная масса грунта при слое 5 см
+        bottom_area_m2 = round((length * width) / 10000.0, 2)
+        ground_weight_kg = round(((length * width * 5) / 1000) * 1.5)
+
         res_text = (
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
-            f"💧 **Объём:** ~{int((length * width * height) / 1000)} л\n\n"
+            f"💧 **Объём:** ~{volume_l} л\n\n"
             f"📊 **Расчетные данные:**\n"
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
-            f"• Расчетный запас прочности: **k = {safety_factor}**\n\n"
-            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов без стяжек и ребер жесткости.*"
+            f"• Запас прочности: **k = {safety_factor}**\n"
+            f"• Рёбра и стяжки: **Не требуются**\n\n"
+            f"⚖️ **Нагрузка и вес:**\n"
+            f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
+            f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
+            f"🌱 **Оснащение и грунт:**\n"
+            f"• Площадь дна: **{bottom_area_m2} м²**\n"
+            f"• Масса грунта (слой 5 см): **~{ground_weight_kg} кг**\n\n"
+            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
         )
         await message.answer(res_text, parse_mode="Markdown", reply_markup=get_channel_keyboard())
 
