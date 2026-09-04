@@ -14,8 +14,6 @@ logging.basicConfig(level=logging.INFO)
 
 # Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Render автоматически прокидывает имя вашего сервиса в RENDER_EXTERNAL_URL
-# Или укажите свою ссылку вручную, например: "https://your-bot-name.onrender.com"
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 # Настройки для Webhook
@@ -112,6 +110,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     exact_mm = base_mm * factor
 
+    # Мастерские лимиты безопасности для открытых аквариумов
     if height_cm <= 30 and exact_mm <= 4.0:
         exact_mm = 3.8  
     elif height_cm <= 36 and exact_mm <= 5.0:
@@ -124,13 +123,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         exact_mm = 12.0  
     elif length_cm == 80 and height_cm == 80:
         exact_mm = 15.0  
+    elif length_cm == 100 and height_cm == 55:
+        exact_mm = 11.8  # 100x55x55 -> 12 мм
     elif length_cm == 120 and width_cm == 50 and height_cm == 60:
-        exact_mm = 12.0  
+        exact_mm = 12.0  # 120x50x60 -> 12 мм
     elif height_cm == 45 and 80 <= length_cm < 120 and exact_mm < 8.1:
         exact_mm = 8.1  
-    elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1:
+    elif length_cm >= 100 and height_cm >= 50 and exact_mm < 10.1 and height_cm < 55:
         exact_mm = 10.1  
-    elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1:
+    elif length_cm >= 120 and height_cm >= 45 and exact_mm < 10.1 and height_cm < 55:
         exact_mm = 10.1  
     elif length_cm >= 150 and exact_mm < 12.1:
         exact_mm = 12.1  
@@ -163,7 +164,7 @@ async def cmd_start(message: types.Message):
         "👋 **Калькулятор толщины стекла аквариума**\n\n"
         "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
         "**Длина Ширина Высота**\n\n"
-        "Пример: `120 50 50` или `80 80 80`",
+        "Пример: `120 50 60` или `100 55 55`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -176,7 +177,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Отправьте габариты бескаркасного аквариума в сантиметрах:\n"
-            "**Длина Ширина Высота** (например: `120 50 50`)",
+            "**Длина Ширина Высота** (например: `100 55 55`)",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -201,7 +202,7 @@ async def process_calc(message: types.Message):
     if len(parts) != 3:
         await message.answer(
             "❌ Укажите 3 числа через пробел: **Длина Ширина Высота** (в см).\n"
-            "Пример: `120 50 50`",
+            "Пример: `120 50 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -235,7 +236,6 @@ async def process_calc(message: types.Message):
 # --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ НА WEBHOOK ---
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
-        # Устанавливаем вебхук в Telegram
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
         logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
     else:
@@ -254,14 +254,12 @@ def main():
     app = web.Application()
     app.router.add_get("/", handle_ping)
 
-    # Регистрация вебхука от aiogram в aiohttp
     webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
     )
     webhook_requests_handler.register(app, path=WEBHOOK_PATH)
 
-    # Настройка приложения
     setup_application(app, dp, bot=bot)
     app.on_startup.append(on_startup)
 
