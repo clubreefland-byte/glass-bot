@@ -84,8 +84,7 @@ def get_channel_keyboard():
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
-    # 1. Расчет напряжений на основе гидростатического давления
-    # Базовое изгибающее напряжение зависит от высоты столба воды
+    # 1. Базовое напряжение от высоты столба воды
     if height_cm <= 30:
         base_mm = 3.8
     elif height_cm <= 35:
@@ -93,30 +92,28 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 40:
         base_mm = 5.8
     elif height_cm <= 45:
-        base_mm = 6.8
+        base_mm = 7.0
     elif height_cm <= 50:
-        base_mm = 7.8
+        base_mm = 8.2
     elif height_cm <= 55:
-        base_mm = 8.9
+        base_mm = 9.8
     elif height_cm <= 60:
-        base_mm = 10.0
-    elif height_cm <= 70:
-        base_mm = 12.5
+        base_mm = 11.2
     else:
         base_mm = height_cm * 0.20
 
-    # 2. Поправочный коэффициент длины (плавный рост для длинных банок)
+    # 2. Поправочный коэффициент длины (учитывает прогиб длинных стенок)
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
     elif ratio <= 1.5:
-        factor = 0.92 + (ratio - 1.0) * 0.12
+        factor = 0.95 + (ratio - 1.0) * 0.12
     elif ratio <= 2.0:
-        factor = 0.98 + (ratio - 1.5) * 0.14
+        factor = 1.01 + (ratio - 1.5) * 0.15
     elif ratio <= 2.5:
-        factor = 1.05 + (ratio - 2.0) * 0.12
+        factor = 1.08 + (ratio - 2.0) * 0.12
     else:
-        factor = 1.11 + (ratio - 2.5) * 0.08
+        factor = 1.14 + (ratio - 2.5) * 0.10
 
     exact_mm = base_mm * factor
 
@@ -131,22 +128,22 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     # 4. Пороги мастерской для открытых бескаркасных аквариумов
     if length_cm >= 140 and height_cm >= 50 and recommended_size < 15:
-        recommended_size = 15  # От 140х50х50 см для открытого бескаркасника — 15 мм
+        recommended_size = 15
     elif length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
-        recommended_size = 12  # От 110х45х45 см — 12 мм
+        recommended_size = 12
     elif length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
-        recommended_size = 10  # От 75х45х45 см — 10 мм
+        recommended_size = 10
     elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
         recommended_size = 10
 
     # 5. Рекомендации по усиливающим элементам
     bracing_text = "Не требуются"
     if length_cm >= 150 and recommended_size < 15:
-        bracing_text = "Рекомендуются рёбра жесткости (или сборка из 15 мм без рёбер)"
+        bracing_text = "Рекомендуются рёбра жесткости"
     elif length_cm >= 180:
-        bracing_text = "Требуются рёбра жесткости и продольная стяжка"
+        bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # 6. Запас прочности k
+    # 6. Реальный запас прочности k
     safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
