@@ -65,17 +65,24 @@ def get_subscribe_keyboard():
     )
 
 
-def get_channel_keyboard():
+def get_channel_keyboard(length=None, width=None, height=None, rec=None):
+    if length and width and height and rec:
+        calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{int(length)}х{int(width)}х{int(height)}см%20из%20стекла%20{rec}мм."
+    else:
+        calc_data = ""
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
+                    text="📩 Узнать стоимость изготовления", 
+                    url=f"https://t.me/Asteriy78{calc_data}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="📢 Канал Reefland", 
                     url="https://t.me/club_reefland"
-                ),
-                InlineKeyboardButton(
-                    text="💬 Заказать / Консультация", 
-                    url="https://t.me/Asteriy78"
                 )
             ]
         ]
@@ -243,9 +250,14 @@ async def process_calc(message: types.Message):
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
-            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
+            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*\n"
+            f"🛠 *Аквариумная мастерская Reefland*"
         )
-        await message.answer(res_text, parse_mode="Markdown", reply_markup=get_channel_keyboard())
+        await message.answer(
+            res_text, 
+            parse_mode="Markdown", 
+            reply_markup=get_channel_keyboard(length, width, height, rec)
+        )
 
     except ValueError:
         await message.answer("❌ Ошибка ввода. Используйте только числа.")
