@@ -241,6 +241,7 @@ async def process_calc(message: types.Message):
         total_weight_kg = int(glass_weight_kg + volume_l)
 
         res_text = (
+            f"🛠 **Аквариумная мастерская Reefland**\n\n"
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
             f"💧 **Объём:** ~{volume_l} л\n\n"
             f"📊 **Расчетные данные:**\n"
@@ -250,8 +251,7 @@ async def process_calc(message: types.Message):
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
-            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*\n"
-            f"🛠 *Аквариумная мастерская Reefland*"
+            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
         )
         await message.answer(
             res_text, 
