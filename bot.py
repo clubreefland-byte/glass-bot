@@ -233,9 +233,6 @@ async def process_calc(message: types.Message):
         glass_weight_kg = round(area_m2 * rec * 2.5, 1)
         total_weight_kg = int(glass_weight_kg + volume_l)
 
-        bottom_area_m2 = round((length * width) / 10000.0, 2)
-        ground_weight_kg = round(((length * width * 5) / 1000) * 1.5)
-
         res_text = (
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
             f"💧 **Объём:** ~{volume_l} л\n\n"
@@ -246,9 +243,6 @@ async def process_calc(message: types.Message):
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
-            f"🌱 **Оснащение и грунт:**\n"
-            f"• Площадь дна: **{bottom_area_m2} м²**\n"
-            f"• Масса грунта (слой 5 см): **~{ground_weight_kg} кг**\n\n"
             f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
         )
         await message.answer(res_text, parse_mode="Markdown", reply_markup=get_channel_keyboard())
