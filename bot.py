@@ -1,388 +1,185 @@
 import asyncio
-import os
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiohttp import web
+import re
+import sys
+from aiogram import Bot, Dispatcher, F, Router, types
+from aiogram.filters import Command, CommandStart
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from google import genai
+from google.genai import types as genai_types
 
-# Логирование
-logging.basicConfig(level=logging.INFO)
+# Токены (замените на свои или настройте через переменные окружения)
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+ADMIN_USERNAME = "Asteriy78"
+CHANNEL_ID = "@club_reefland"
 
-# Переменные окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+# Инициализация Gemini
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- ВАШ TELEGRAM ID ДЛЯ ДОСТУПА К СТАТИСТИКЕ ---
-ADMIN_ID = 1318763491
+SYSTEM_PROMPT = (
+    "Ты — официальный умный помощник аквариумной мастерской Reefland. "
+    "Отвечай экспертно, вежливо и понятно на вопросы по аквариумистике, "
+    "уходу за растениями (анубиасы, папоротники), выбору стекла (Optiwhite, М1) "
+    "и запуску аквариумов. Если уместно, мягко предлагай обратиться к мастеру "
+    "для заказа индивидуального аквариума."
+)
 
-# Настройки для Webhook
-WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
-WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+router = Router()
 
-PORT = int(os.getenv("PORT", 10000))
-
-bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
-dp = Dispatcher(storage=MemoryStorage())
-
-CHANNEL_USERNAME = "@club_reefland"
-
-# --- СТАТИСТИКА (в памяти бота) ---
-bot_stats = {
-    "users": {},  # Ключ: user_id, Значение: {"name": ..., "username": ..., "calculations": 0}
-    "total_calculations": 0
-}
+# Хранилище статистики
+user_stats = {}
 
 
-# --- ПРОВЕРКА ПОДПИСКИ НА КАНАЛ ---
-async def check_user_subscription(user_id: int) -> bool:
-    if not bot:
-        return True
-    try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        if member.status in ["creator", "administrator", "member"]:
-            return True
-        return False
-    except TelegramBadRequest:
-        logging.error("Не удалось проверить подписку.")
-        return True 
-    except Exception as e:
-        logging.error(f"Ошибка проверки подписки: {e}")
-        return True
-
-
-# --- КЛАВИАТУРЫ ---
-def get_subscribe_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📢 Подписаться на Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔄 Проверить подписку", 
-                    callback_data="check_sub"
-                )
-            ]
-        ]
-    )
-
-
-def get_start_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📢 Канал Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ]
-        ]
-    )
+def check_sub_keyboard():
+  return InlineKeyboardMarkup(
+      inline_keyboard=[[
+          InlineKeyboardButton(
+              text="📢 Подписаться на канал", url="https://t.me/club_reefland"
+          )
+      ]]
+  )
 
 
 def get_result_keyboard(length, width, height, rec):
-    l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20 из%20стекла%20{r_int}мм."
+  l_int, w_int, h_int, r_int = (
+      int(round(length)),
+      int(round(width)),
+      int(round(height)),
+      int(round(rec)),
+  )
+  # Ссылка с обычными пробелами вместо %20
+  calc_data = f"?text=Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
 
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📩 Узнать стоимость изготовления", 
-                    url=f"https://t.me/Asteriy78{calc_data}"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📢 Канал Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ]
-        ]
-    )
-
-
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
-    if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
-        raise ValueError("Размеры должны быть больше нуля.")
-
-    if height_cm <= 30:
-        base_mm = 3.8
-    elif height_cm <= 35:
-        base_mm = 4.8
-    elif height_cm <= 40:
-        base_mm = 5.8
-    elif height_cm <= 45:
-        base_mm = 7.0
-    elif height_cm <= 50:
-        base_mm = 8.2
-    elif height_cm <= 55:
-        base_mm = 9.8
-    elif height_cm <= 60:
-        base_mm = 11.2
-    else:
-        base_mm = height_cm * 0.20
-
-    ratio = length_cm / height_cm
-    if ratio <= 1.0:
-        factor = 0.90
-    elif ratio <= 1.5:
-        factor = 0.95 + (ratio - 1.0) * 0.12
-    elif ratio <= 2.0:
-        factor = 1.01 + (ratio - 1.5) * 0.15
-    elif ratio <= 2.5:
-        factor = 1.08 + (ratio - 2.0) * 0.12
-    else:
-        factor = 1.14 + (ratio - 2.5) * 0.10
-
-    exact_mm = base_mm * factor
-
-    standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
-    recommended_size = standard_sizes[-1]
-    
-    for size in standard_sizes:
-        if size + 0.05 >= exact_mm:
-            recommended_size = size
-            break
-
-    if length_cm >= 140 and height_cm >= 50 and recommended_size < 15:
-        recommended_size = 15
-    elif length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
-        recommended_size = 12
-    elif length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
-        recommended_size = 10
-    elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
-        recommended_size = 10
-
-    bracing_text = "Не требуются"
-    if length_cm >= 150 and recommended_size < 15:
-        bracing_text = "Рекомендуются рёбра жесткости"
-    elif length_cm >= 180:
-        bracing_text = "Требуются рёбра жесткости и стяжка"
-
-    if exact_mm <= 0:
-        safety_factor = 99.0
-    else:
-        safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
-
-    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
+  return InlineKeyboardMarkup(
+      inline_keyboard=[
+          [
+              InlineKeyboardButton(
+                  text="📩 Узнать стоимость изготовления",
+                  url=f"https://t.me/{ADMIN_USERNAME}{calc_data}",
+              )
+          ],
+          [
+              InlineKeyboardButton(
+                  text="📢 Канал Reefland", url="https://t.me/club_reefland"
+              )
+          ],
+      ]
+  )
 
 
-# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ УЧЕТА ПОЛЬЗОВАТЕЛЕЙ ---
-def register_user(user: types.User):
-    user_id = user.id
-    full_name = user.full_name or "Без имени"
-    username = f"@{user.username}" if user.username else "нет username"
-    
-    if user_id not in bot_stats["users"]:
-        bot_stats["users"][user_id] = {
-            "name": full_name,
-            "username": username,
-            "calculations": 0
-        }
-    else:
-        # Обновляем имя/юзернейм на случай, если пользователь их сменил
-        bot_stats["users"][user_id]["name"] = full_name
-        bot_stats["users"][user_id]["username"] = username
+async def check_subscription(bot: Bot, user_id: int) -> bool:
+  try:
+    member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+    return member.status in ["creator", "administrator", "member"]
+  except Exception:
+    return False
 
 
-# --- ХЕНДЛЕРЫ ---
-@dp.message(Command("start"))
+@router.message(CommandStart())
 async def cmd_start(message: types.Message):
-    user_id = message.from_user.id
-    register_user(message.from_user)
-
-    if not await check_user_subscription(user_id):
-        await message.answer(
-            "🔒 **Доступ ограничен!**\n\n"
-            "Чтобы пользоваться калькулятором толщины стекла, необходимо подписаться на наш канал **Аквариумная мастерская Reefland**.",
-            parse_mode="Markdown",
-            reply_markup=get_subscribe_keyboard()
-        )
-        return
-
-    await message.answer(
-        "🛠 **Аквариумная мастерская Reefland**\n\n"
-        "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
-        "Отправьте размеры: Длина Ширина Высота (см).\n"
-        "Пример: `150х60х60` или `150 60 60`",
-        parse_mode="Markdown",
-        reply_markup=get_start_keyboard()
-    )
+  await message.answer(
+      "👋 Привет! Я бот-помощник аквариумной мастерской Reefland.\n\n"
+      "📐 **Калькулятор стекла:** отправьте размеры в формате `ДлинахШиринахВысота` (например, `100x45x45`).\n"
+      "🤖 **ИИ-справочник:** задайте мне любой вопрос по уходу за аквариумом, растениям или оборудованию."
+  )
 
 
-# --- СТАТИСТИКА С ПОДРОБНЫМ СПИСКОМ ПОЛЬЗОВАТЕЛЕЙ ---
-@dp.message(Command("stats"))
+@router.message(Command("stats"))
 async def cmd_stats(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+  total_users = len(user_stats)
+  total_calcs = sum(data["calcs"] for data in user_stats.values())
 
-    total_users = len(bot_stats["users"])
-    total_calcs = bot_stats["total_calculations"]
-
-    stats_text = (
-        "📈 **Статистика использования бота:**\n\n"
-        f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Всего расчетов: **{total_calcs}**\n\n"
-        "👤 **Список пользователей:**\n"
+  stats_text = (
+      f"📊 Статистика использования бота:\n\n"
+      f"👥 Уникальных пользователей: {total_users}\n"
+      f"📐 Всего расчетов: {total_calcs}\n\n"
+      f"👤 Список пользователей:\n"
+  )
+  for user_id, data in user_stats.items():
+    uname = f"(@{data['username']})" if data["username"] else "(нет username)"
+    stats_text += (
+        f"• {data['full_name']} {uname} — расчетов: {data['calcs']}\n"
     )
 
-    if not bot_stats["users"]:
-        stats_text += "_Пока никто не пользовался ботом._"
-    else:
-        # Формируем список (берем последние 20 пользователей, чтобы не превысить лимит сообщения Telegram)
-        user_lines = []
-        for uid, data in list(bot_stats["users"].items())[-20:]:
-            name = data["name"]
-            username = data["username"]
-            calcs = data["calculations"]
-            user_lines.append(f"• {name} ({username}) — расчетов: {calcs}")
-        
-        stats_text += "\n".join(user_lines)
-        if total_users > 20:
-            stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
-
-    await message.answer(stats_text, parse_mode="Markdown")
+  await message.answer(stats_text)
 
 
-@dp.callback_query(lambda c: c.data == "check_sub")
-async def process_check_sub(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    register_user(callback.from_user)
-    
-    if await check_user_subscription(user_id):
-        await callback.message.edit_text(
-            "🛠 **Аквариумная мастерская Reefland**\n\n"
-            "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
-            "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
-            "Отправьте размеры: Длина Ширина Высота (см).\n"
-            "Пример: `150х60х60` или `150 60 60`",
-            parse_mode="Markdown",
-            reply_markup=get_start_keyboard()
-        )
-    else:
-        await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+@router.message()
+async def handle_message(message: types.Message, bot: Bot):
+  user_id = message.from_user.id
+  user_name = message.from_user.full_name
+  user_username = message.from_user.username
 
+  # Проверяем подписку на канал
+  if not await check_subscription(bot, user_id):
+    await message.answer(
+        "🔒 Для использования бота необходимо подписаться на наш канал @club_reefland.",
+        reply_markup=check_sub_keyboard(),
+    )
+    return
 
-@dp.message()
-async def process_calc(message: types.Message):
-    user_id = message.from_user.id
-    register_user(message.from_user)
+  text = message.text.strip()
+  # Поиск трех чисел для расчета (например, 100х50х50 или 100 50 50)
+  numbers = re.findall(r"\d+(?:[.,]\d+)?", text)
 
-    if not await check_user_subscription(user_id):
-        await message.answer(
-            "🔒 Чтобы рассчитать толщину стекла, пожалуйста, подпишитесь на наш канал.",
-            parse_mode="Markdown",
-            reply_markup=get_subscribe_keyboard()
-        )
-        return
+  if len(numbers) == 3:
+    # Логика калькулятора стекла
+    length, width, height = map(float, [n.replace(",", ".") for n in numbers])
+    volume = (length * width * height) / 1000
 
-    text = message.text.lower().replace(",", ".").replace("х", " ").replace("x", " ").replace("*", " ").replace("мм", "").strip()
-    parts = text.split()
+    # Простая формула расчета толщины (упрощенный пример)
+    rec_glass = max(6.0, (height * 0.5) / 10 + 2)
 
-    if len(parts) != 3:
-        await message.answer(
-            "❌ Укажите 3 числа через пробел или «х»:\n\n"
-            "Отправьте размеры: Длина Ширина Высота (см).\n"
-            "Пример: `150х60х60` или `150 60 60`",
-            parse_mode="Markdown",
-            reply_markup=get_start_keyboard()
-        )
-        return
+    # Учет статистики
+    if user_id not in user_stats:
+      user_stats[user_id] = {
+          "full_name": user_name,
+          "username": user_username,
+          "calcs": 0,
+      }
+    user_stats[user_id]["calcs"] += 1
 
+    response = (
+        f"💧 Объем: ~{int(volume)} л\n\n"
+        f"📊 Расчетные данные:\n"
+        f"• Рекомендуемое стекло: {round(rec_glass, 1)} мм (Optiwhite или М1)\n"
+        f"• Запас прочности: k = ~3.8\n"
+        f"• Нагрузка и вес:\n"
+        f"• Сухой вес стекла: ~{int(volume * 0.15)} кг\n"
+        f"• Вес с водой: ~{int(volume + volume * 0.15)} кг\n\n"
+        f"📐 Расчет выполнен для бескаркасных открытых аквариумов."
+    )
+    await message.answer(
+        response, reply_markup=get_result_keyboard(length, width, height, rec_glass)
+    )
+  else:
+    # Если это не размеры, отправляем запрос в Gemini ИИ-справочнику
+    await bot.send_chat_action(message.chat.id, "typing")
     try:
-        length = float(parts[0])
-        width = float(parts[1])
-        height = float(parts[2])
-
-        if length > 300 or width > 300 or height > 300:
-            length /= 10.0
-            width /= 10.0
-            height /= 10.0
-
-        if length <= 0 or width <= 0 or height <= 0:
-            await message.answer("⚠️ Все размеры должны быть больше 0.")
-            return
-
-        # Учитываем расчет для общего счетчика и для конкретного пользователя
-        bot_stats["total_calculations"] += 1
-        bot_stats["users"][user_id]["calculations"] += 1
-
-        exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
-
-        volume_l = int((length * width * height) / 1000)
-        
-        area_m2 = ((length * width) + 2 * (length * height) + 2 * (width * height)) / 10000.0
-        glass_weight_kg = round(area_m2 * rec * 2.5, 1)
-        total_weight_kg = int(glass_weight_kg + volume_l)
-
-        res_text = (
-            f"🛠 **Аквариумная мастерская Reefland**\n\n"
-            f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
-            f"💧 **Объём:** ~{volume_l} л\n\n"
-            f"📊 **Расчетные данные:**\n"
-            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
-            f"• Запас прочности: **k = {safety_factor}**\n"
-            f"• Рёбра и стяжки: **{bracing_text}**\n\n"
-            f"⚖️ **Нагрузка и вес:**\n"
-            f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
-            f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
-            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
-        )
-        await message.answer(
-            res_text, 
-            parse_mode="Markdown", 
-            reply_markup=get_result_keyboard(length, width, height, rec)
-        )
-
-    except ValueError as ve:
-        await message.answer(f"❌ Ошибка в данных: {ve}")
+      response = ai_client.models.generate_content(
+          model="gemini-2.5-flash",
+          contents=text,
+          config=genai_types.GenerateContentConfig(
+              system_instruction=SYSTEM_PROMPT, temperature=0.7
+          ),
+      )
+      await message.answer(response.text)
     except Exception as e:
-        logging.error(f"Непредвиденная ошибка при расчете для юзера {user_id}: {e}")
-        await message.answer("❌ Произошла ошибка при вычислении. Проверьте правильность введенных чисел.")
+      logging.error(f"Ошибка Gemini API: {e}")
+      await message.answer(
+          "Извините, произошла ошибка при обращении к ИИ-ассистенту. Попробуйте сформулировать вопрос иначе."
+      )
 
 
-# --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ НА WEBHOOK ---
-async def on_startup(app: web.Application):
-    if bot and WEBHOOK_URL:
-        await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
-        logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
-    else:
-        logging.warning("WEBHOOK_URL не задан или бот не инициализирован!")
-
-
-async def handle_ping(request):
-    return web.Response(text="OK", status=200)
-
-
-def main():
-    if not BOT_TOKEN:
-        logging.error("ОШИБКА: BOT_TOKEN не задан!")
-        return
-
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-    )
-    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
-
-    setup_application(app, dp, bot=bot)
-    app.on_startup.append(on_startup)
-
-    logging.info(f"Запуск веб-сервера на порту {PORT}...")
-    web.run_app(app, host="0.0.0.0", port=PORT)
+async def main():
+  bot = Bot(token=TELEGRAM_BOT_TOKEN)
+  dp = Dispatcher()
+  dp.include_router(router)
+  await bot.delete_webhook(drop_pending_updates=True)
+  await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    main()
+  asyncio.run(main())
