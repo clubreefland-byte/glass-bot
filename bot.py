@@ -32,7 +32,7 @@ CHANNEL_USERNAME = "@club_reefland"
 
 # --- СТАТИСТИКА (в памяти бота) ---
 bot_stats = {
-    "unique_users": set(),
+    "users": {},  # Ключ: user_id, Значение: {"name": ..., "username": ..., "calculations": 0}
     "total_calculations": 0
 }
 
@@ -176,13 +176,29 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
 
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ УЧЕТА ПОЛЬЗОВАТЕЛЕЙ ---
+def register_user(user: types.User):
+    user_id = user.id
+    full_name = user.full_name or "Без имени"
+    username = f"@{user.username}" if user.username else "нет username"
+    
+    if user_id not in bot_stats["users"]:
+        bot_stats["users"][user_id] = {
+            "name": full_name,
+            "username": username,
+            "calculations": 0
+        }
+    else:
+        # Обновляем имя/юзернейм на случай, если пользователь их сменил
+        bot_stats["users"][user_id]["name"] = full_name
+        bot_stats["users"][user_id]["username"] = username
+
+
 # --- ХЕНДЛЕРЫ ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    
-    # Учет уникальных пользователей для статистики
-    bot_stats["unique_users"].add(user_id)
+    register_user(message.from_user)
 
     if not await check_user_subscription(user_id):
         await message.answer(
@@ -203,26 +219,45 @@ async def cmd_start(message: types.Message):
     )
 
 
-# --- СКРЫТАЯ КОМАНДА СТАТИСТИКИ (ТОЛЬКО ДЛЯ АДМИНИСТРАТОРА) ---
+# --- СТАТИСТИКА С ПОДРОБНЫМ СПИСКОМ ПОЛЬЗОВАТЕЛЕЙ ---
 @dp.message(Command("stats"))
 async def cmd_stats(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
 
-    total_users = len(bot_stats["unique_users"])
+    total_users = len(bot_stats["users"])
     total_calcs = bot_stats["total_calculations"]
 
     stats_text = (
         "📈 **Статистика использования бота:**\n\n"
         f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Выполнено расчетов: **{total_calcs}**"
+        f"📐 Всего расчетов: **{total_calcs}**\n\n"
+        "👤 **Список пользователей:**\n"
     )
+
+    if not bot_stats["users"]:
+        stats_text += "_Пока никто не пользовался ботом._"
+    else:
+        # Формируем список (берем последние 20 пользователей, чтобы не превысить лимит сообщения Telegram)
+        user_lines = []
+        for uid, data in list(bot_stats["users"].items())[-20:]:
+            name = data["name"]
+            username = data["username"]
+            calcs = data["calculations"]
+            user_lines.append(f"• {name} ({username}) — расчетов: {calcs}")
+        
+        stats_text += "\n".join(user_lines)
+        if total_users > 20:
+            stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
+
     await message.answer(stats_text, parse_mode="Markdown")
 
 
 @dp.callback_query(lambda c: c.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    register_user(callback.from_user)
+    
     if await check_user_subscription(user_id):
         await callback.message.edit_text(
             "🛠 **Аквариумная мастерская Reefland**\n\n"
@@ -240,9 +275,7 @@ async def process_check_sub(callback: types.CallbackQuery):
 @dp.message()
 async def process_calc(message: types.Message):
     user_id = message.from_user.id
-    
-    # Учитываем пользователя, даже если он сразу шлет расчет без /start
-    bot_stats["unique_users"].add(user_id)
+    register_user(message.from_user)
 
     if not await check_user_subscription(user_id):
         await message.answer(
@@ -279,8 +312,9 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        # Успешный расчет — инкрементируем счетчик
+        # Учитываем расчет для общего счетчика и для конкретного пользователя
         bot_stats["total_calculations"] += 1
+        bot_stats["users"][user_id]["calculations"] += 1
 
         exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
 
