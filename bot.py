@@ -65,12 +65,22 @@ def get_subscribe_keyboard():
     )
 
 
-def get_channel_keyboard(length=None, width=None, height=None, rec=None):
-    if length is not None and width is not None and height is not None and rec is not None:
-        l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-        calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
-    else:
-        calc_data = ""
+def get_start_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📢 Канал Reefland", 
+                    url="https://t.me/club_reefland"
+                )
+            ]
+        ]
+    )
+
+
+def get_result_keyboard(length, width, height, rec):
+    l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
+    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20 из%20стекла%20{r_int}мм."
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -182,7 +192,7 @@ async def cmd_start(message: types.Message):
         "Отправьте размеры: Длина Ширина Высота (см).\n"
         "Пример: `150х60х60` или `150 60 60`",
         parse_mode="Markdown",
-        reply_markup=get_channel_keyboard()
+        reply_markup=get_start_keyboard()
     )
 
 
@@ -197,7 +207,7 @@ async def process_check_sub(callback: types.CallbackQuery):
             "Отправьте размеры: Длина Ширина Высота (см).\n"
             "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown",
-            reply_markup=None
+            reply_markup=get_start_keyboard()
         )
     else:
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
@@ -223,7 +233,7 @@ async def process_calc(message: types.Message):
             "Отправьте размеры: Длина Ширина Высота (см).\n"
             "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown",
-            reply_markup=None
+            reply_markup=get_start_keyboard()
         )
         return
 
@@ -265,7 +275,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             res_text, 
             parse_mode="Markdown", 
-            reply_markup=get_channel_keyboard(length, width, height, rec)
+            reply_markup=get_result_keyboard(length, width, height, rec)
         )
 
     except ValueError as ve:
