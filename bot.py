@@ -66,8 +66,10 @@ def get_subscribe_keyboard():
 
 
 def get_channel_keyboard(length=None, width=None, height=None, rec=None):
-    if length and width and height and rec:
-        calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{int(length)}х{int(width)}х{int(height)}см%20из%20стекла%20{rec}мм."
+    if length is not None and width is not None and height is not None and rec is not None:
+        # Безопасное приведение к int, чтобы в тексте ссылки не было точек (".0")
+        l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
+        calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
     else:
         calc_data = ""
 
@@ -91,6 +93,9 @@ def get_channel_keyboard(length=None, width=None, height=None, rec=None):
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
+    if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
+        raise ValueError("Размеры должны быть больше нуля.")
+
     # 1. Базовое напряжение от высоты столба воды
     if height_cm <= 30:
         base_mm = 3.8
@@ -150,8 +155,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # 6. Реальный запас прочности k
-    safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
+    # 6. Реальный запас прочности k (с защитой от деления на ноль)
+    if exact_mm <= 0:
+        safety_factor = 99.0
+    else:
+        safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
@@ -223,7 +231,8 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        if length > 200 or width > 200 or height > 200:
+        # Улучшенная нормализация: делим на 10 только если габариты явно в миллиметрах (> 300)
+        if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
             height /= 10.0
@@ -259,8 +268,11 @@ async def process_calc(message: types.Message):
             reply_markup=get_channel_keyboard(length, width, height, rec)
         )
 
-    except ValueError:
-        await message.answer("❌ Ошибка ввода. Используйте только числа.")
+    except ValueError as ve:
+        await message.answer(f"❌ Ошибка в данных: {ve}")
+    except Exception as e:
+        logging.error(f"Непредвиденная ошибка при расчете для юзера {user_id}: {e}")
+        await message.answer("❌ Произошла ошибка при вычислении. Проверьте правильность введенных чисел.")
 
 
 # --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ НА WEBHOOK ---
