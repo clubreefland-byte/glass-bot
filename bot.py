@@ -89,7 +89,7 @@ def get_start_keyboard():
 
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20 из%20стекла%20{r_int}мм."
+    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -189,7 +189,6 @@ def register_user(user: types.User):
             "calculations": 0
         }
     else:
-        # Обновляем имя/юзернейм на случай, если пользователь их сменил
         bot_stats["users"][user_id]["name"] = full_name
         bot_stats["users"][user_id]["username"] = username
 
@@ -219,7 +218,6 @@ async def cmd_start(message: types.Message):
     )
 
 
-# --- СТАТИСТИКА С ПОДРОБНЫМ СПИСКОМ ПОЛЬЗОВАТЕЛЕЙ ---
 @dp.message(Command("stats"))
 async def cmd_stats(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -238,7 +236,6 @@ async def cmd_stats(message: types.Message):
     if not bot_stats["users"]:
         stats_text += "_Пока никто не пользовался ботом._"
     else:
-        # Формируем список (берем последние 20 пользователей, чтобы не превысить лимит сообщения Telegram)
         user_lines = []
         for uid, data in list(bot_stats["users"].items())[-20:]:
             name = data["name"]
@@ -312,7 +309,6 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        # Учитываем расчет для общего счетчика и для конкретного пользователя
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
 
@@ -350,7 +346,6 @@ async def process_calc(message: types.Message):
         await message.answer("❌ Произошла ошибка при вычислении. Проверьте правильность введенных чисел.")
 
 
-# --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ НА WEBHOOK ---
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
