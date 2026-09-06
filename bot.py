@@ -180,7 +180,7 @@ async def cmd_start(message: types.Message):
         "🛠 **Аквариумная мастерская Reefland**\n\n"
         "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
         "Отправьте размеры: Длина Ширина Высота (см).\n"
-        "Пример: `1500х600х600` или `150 60 60`",
+        "Пример: `150х60х60` или `150 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
     )
@@ -195,7 +195,7 @@ async def process_check_sub(callback: types.CallbackQuery):
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
             "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
             "Отправьте размеры: Длина Ширина Высота (см).\n"
-            "Пример: `1500х600х600` или `150 60 60`",
+            "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -221,7 +221,7 @@ async def process_calc(message: types.Message):
         await message.answer(
             "❌ Укажите 3 числа через пробел или «х»:\n\n"
             "Отправьте размеры: Длина Ширина Высота (см).\n"
-            "Пример: `1500х600х600` или `150 60 60`",
+            "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
