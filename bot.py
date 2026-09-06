@@ -6,7 +6,8 @@ from aiogram import Bot, Dispatcher, Router, types
 from aiogram.filters import Command, CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+# Интегрирован ваш токен бота
+TELEGRAM_BOT_TOKEN = "8981341931:AAHm-4nDSzBu7iRpbHj5-i2NLVMhtRxh2Vc"
 ADMIN_USERNAME = "Asteriy78"
 CHANNEL_ID = "@club_reefland"
 
@@ -27,7 +28,7 @@ def get_result_keyboard(length, width, height, rec):
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📩 Узнать стоимость изготовления", url=f"https://t.me/{ADMIN_USERNAME}{calc_data}")],
-            [InlineKeyboardButton(text="📢 Канал Reefland", url="https://t.me/club_reefland")]
+            [InlineKeyboardButton(text="📢 Канал Рефленд", url="https://t.me/club_reefland")]
         ]
     )
 
