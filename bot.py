@@ -16,6 +16,9 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
+# --- ВАШ TELEGRAM ID ДЛЯ ДОСТУПА К СТАТИСТИКЕ ---
+ADMIN_ID = 1318763491
+
 # Настройки для Webhook
 WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
@@ -26,6 +29,12 @@ bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
+
+# --- СТАТИСТИКА (в памяти бота) ---
+bot_stats = {
+    "unique_users": set(),
+    "total_calculations": 0
+}
 
 
 # --- ПРОВЕРКА ПОДПИСКИ НА КАНАЛ ---
@@ -105,7 +114,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    # 1. Базовое напряжение от высоты столба воды
     if height_cm <= 30:
         base_mm = 3.8
     elif height_cm <= 35:
@@ -123,7 +131,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         base_mm = height_cm * 0.20
 
-    # 2. Поправочный коэффициент длины (учитывает прогиб длинных стенок)
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
@@ -138,7 +145,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     exact_mm = base_mm * factor
 
-    # 3. Подбор стандартного номинала
     standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
     recommended_size = standard_sizes[-1]
     
@@ -147,7 +153,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # 4. Пороги мастерской для открытых бескаркасных аквариумов
     if length_cm >= 140 and height_cm >= 50 and recommended_size < 15:
         recommended_size = 15
     elif length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
@@ -157,14 +162,12 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
         recommended_size = 10
 
-    # 5. Рекомендации по усиливающим элементам
     bracing_text = "Не требуются"
     if length_cm >= 150 and recommended_size < 15:
         bracing_text = "Рекомендуются рёбра жесткости"
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # 6. Реальный запас прочности k (с защитой от деления на ноль)
     if exact_mm <= 0:
         safety_factor = 99.0
     else:
@@ -177,6 +180,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
+    
+    # Учет уникальных пользователей для статистики
+    bot_stats["unique_users"].add(user_id)
+
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 **Доступ ограничен!**\n\n"
@@ -194,6 +201,23 @@ async def cmd_start(message: types.Message):
         parse_mode="Markdown",
         reply_markup=get_start_keyboard()
     )
+
+
+# --- СКРЫТАЯ КОМАНДА СТАТИСТИКИ (ТОЛЬКО ДЛЯ АДМИНИСТРАТОРА) ---
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    total_users = len(bot_stats["unique_users"])
+    total_calcs = bot_stats["total_calculations"]
+
+    stats_text = (
+        "📈 **Статистика использования бота:**\n\n"
+        f"👥 Уникальных пользователей: **{total_users}**\n"
+        f"📐 Выполнено расчетов: **{total_calcs}**"
+    )
+    await message.answer(stats_text, parse_mode="Markdown")
 
 
 @dp.callback_query(lambda c: c.data == "check_sub")
@@ -216,6 +240,10 @@ async def process_check_sub(callback: types.CallbackQuery):
 @dp.message()
 async def process_calc(message: types.Message):
     user_id = message.from_user.id
+    
+    # Учитываем пользователя, даже если он сразу шлет расчет без /start
+    bot_stats["unique_users"].add(user_id)
+
     if not await check_user_subscription(user_id):
         await message.answer(
             "🔒 Чтобы рассчитать толщину стекла, пожалуйста, подпишитесь на наш канал.",
@@ -250,6 +278,9 @@ async def process_calc(message: types.Message):
         if length <= 0 or width <= 0 or height <= 0:
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
+
+        # Успешный расчет — инкрементируем счетчик
+        bot_stats["total_calculations"] += 1
 
         exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
 
