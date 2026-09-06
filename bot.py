@@ -67,7 +67,6 @@ def get_subscribe_keyboard():
 
 def get_channel_keyboard(length=None, width=None, height=None, rec=None):
     if length is not None and width is not None and height is not None and rec is not None:
-        # Безопасное приведение к int, чтобы в тексте ссылки не было точек (".0")
         l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
         calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
     else:
@@ -178,9 +177,9 @@ async def cmd_start(message: types.Message):
         return
 
     await message.answer(
-        "👋 **Калькулятор толщины стекла аквариума**\n\n"
-        "Отправьте габариты бескаркасного аквариума:\n"
-        "**Длина Ширина Высота**\n\n"
+        "🛠 **Аквариумная мастерская Reefland**\n\n"
+        "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
+        "Отправьте размеры: Длина Ширина Высота (см).\n"
         "Пример: `1500х600х600` или `150 60 60`",
         parse_mode="Markdown",
         reply_markup=get_channel_keyboard()
@@ -192,9 +191,11 @@ async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if await check_user_subscription(user_id):
         await callback.message.edit_text(
+            "🛠 **Аквариумная мастерская Reefland**\n\n"
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
-            "Отправьте габариты бескаркасного аквариума:\n"
-            "**Длина Ширина Высота** (например: `1500х600х600` или `150 60 60`)",
+            "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
+            "Отправьте размеры: Длина Ширина Высота (см).\n"
+            "Пример: `1500х600х600` или `150 60 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
         )
@@ -218,8 +219,8 @@ async def process_calc(message: types.Message):
 
     if len(parts) != 3:
         await message.answer(
-            "❌ Укажите 3 числа через пробел или «х»:\n"
-            "**Длина Ширина Высота**\n"
+            "❌ Укажите 3 числа через пробел или «х»:\n\n"
+            "Отправьте размеры: Длина Ширина Высота (см).\n"
             "Пример: `1500х600х600` или `150 60 60`",
             parse_mode="Markdown",
             reply_markup=get_channel_keyboard()
@@ -231,7 +232,6 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Улучшенная нормализация: делим на 10 только если габариты явно в миллиметрах (> 300)
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
