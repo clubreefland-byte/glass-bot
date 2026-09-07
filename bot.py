@@ -144,10 +144,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.11 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину (учитывает нагрузку на дно и торцевые швы)
+    # Поправка на ширину относительно длины (акцентирует нагрузку на дно и швы)
     width_ratio = width_cm / length_cm
-    if width_ratio > 0.40:
-        factor += (width_ratio - 0.40) * 0.08
+    if width_ratio > 0.33:
+        factor += (width_ratio - 0.33) * 0.25
 
     exact_mm = base_mm * factor
 
