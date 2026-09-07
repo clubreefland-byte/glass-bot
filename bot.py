@@ -104,10 +104,12 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
+    # Базовая толщина от высоты
     if height_cm <= 30:
         base_mm = 3.5
     elif height_cm <= 35:
@@ -125,6 +127,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         base_mm = height_cm * 0.19
 
+    # Коэффициент соотношения длины и высоты
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
@@ -137,6 +140,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.11 + (ratio - 2.5) * 0.08
 
+    # Поправка на ширину относительно высоты
     if width_cm > height_cm:
         w_h_ratio = width_cm / height_cm
         factor += (w_h_ratio - 1.0) * 0.15
@@ -151,10 +155,12 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
+    # Жесткие пороги безопасности для открытых (Rimless) систем:
+    # При L >= 120 см ставим минимум 12 мм и подтягиваем exact_mm для правильного k
     if length_cm >= 160 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
         exact_mm = max(exact_mm, 12.2)
-    elif length_cm >= 120 and (height_cm >= 50 or width_cm >= 60) and recommended_size < 12:
+    elif length_cm >= 120 and recommended_size < 12:
         recommended_size = 12
         exact_mm = max(exact_mm, 10.3)
     elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
