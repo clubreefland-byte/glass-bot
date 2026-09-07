@@ -164,14 +164,14 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         recommended_size = 6
 
     # Экспертные пороги для бескаркасных систем (Rimless) по стандарту мастерской
-    if (length_cm >= 150 and height_cm >= 60) or height_cm >= 75:
+    if (length_cm >= 150 and height_cm >= 60) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
-            recommended_size = 15
-    elif (115 <= length_cm <= 125) and (42 <= height_cm <= 60):
-        recommended_size = 12  # Стандарт 12 мм для 120х50х60, 120х45х45
+            recommended_size = 15  # 120х60х60 и крупнее -> 15 мм
+    elif (115 <= length_cm <= 125) and (width_cm <= 55) and (42 <= height_cm <= 60):
+        recommended_size = 12  # 120х50х60, 120х45х45 -> 12 мм
     elif (height_cm >= 60) or (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45):
         if recommended_size < 12:
-            recommended_size = 12  # Высота от 60 см (включая 70х60х60, 90х60х60) -> 12 мм
+            recommended_size = 12  # Высота от 60 см (70х60х60, 90х60х60) -> 12 мм
     elif (length_cm >= 70 and height_cm >= 45) or (width_cm >= 50 and height_cm >= 50):
         if recommended_size < 10:
             recommended_size = 10  # 70х50х50, 80х50х50, 90х50х50 -> 10 мм
