@@ -155,12 +155,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Жесткие пороги безопасности для открытых (Rimless) систем:
-    # При L >= 120 см ставим минимум 12 мм и подтягиваем exact_mm для правильного k
-    if length_cm >= 160 and height_cm >= 55 and recommended_size < 15:
+    # Пороги безопасности для открытых (Rimless) систем
+    if length_cm >= 150 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
         exact_mm = max(exact_mm, 12.2)
-    elif length_cm >= 120 and recommended_size < 12:
+    elif ((length_cm >= 100 and height_cm >= 50) or length_cm >= 120) and recommended_size < 12:
         recommended_size = 12
         exact_mm = max(exact_mm, 10.3)
     elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
