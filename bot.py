@@ -167,9 +167,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     if (length_cm >= 150 and height_cm >= 60) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
             recommended_size = 15  # 120х60х60, 150х60х60 и крупнее -> 15 мм
-    elif (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45) or height_cm > 60:
+    elif (length_cm >= 70 and height_cm >= 60) or (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45) or height_cm > 60:
         if recommended_size < 12:
-            recommended_size = 12  # 120х50х60, длинные аквариумы от h=50 см или height > 60 см -> 12 мм
+            recommended_size = 12  # 70х60х60, 120х50х60, длинные аквариумы от h=50 см или height > 60 см -> 12 мм
     elif (length_cm >= 60 and height_cm >= 50) or (width_cm >= 60 and height_cm >= 50) or (length_cm >= 70 and height_cm >= 45):
         if recommended_size < 10:
             recommended_size = 10  # Куб 60х60х60, 70х50х50, 80х50х50, 90х50х50 -> 10 мм
