@@ -159,11 +159,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
+    # Порог мастерской: минимум 6 мм при длине или ширине от 50 см
+    if (length_cm >= 50 or width_cm >= 50) and recommended_size < 6:
+        recommended_size = 6
+
     # Экспертные пороги для бескаркасных систем (Rimless) по стандарту мастерской
     if (115 <= length_cm <= 125) and (42 <= height_cm <= 48):
-        recommended_size = 12  # Жесткий стандарт мастерской для 120х45х45
-    elif (75 <= length_cm <= 85) and (48 <= height_cm <= 52):
-        recommended_size = 10  # Жесткий стандарт мастерской для 80х50х50
+        recommended_size = 12  # Стандарт для 120х45х45
+    elif (75 <= length_cm <= 85) and (42 <= height_cm <= 52):
+        recommended_size = 10  # Стандарт для 80х45х45 и 80х50х50
     elif (length_cm >= 150 and height_cm >= 55) or (length_cm >= 120 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
             recommended_size = 15
