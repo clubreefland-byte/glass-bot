@@ -104,8 +104,8 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
@@ -182,13 +182,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # Расчет запаса прочности k
-    if exact_mm <= 0:
-        safety_factor = 99.0
-    else:
-        safety_factor = round(3.0 * ((recommended_size / exact_mm) ** 2), 1)
-
-    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
+    return round(exact_mm, 2), recommended_size, bracing_text
 
 
 def register_user(user: types.User):
@@ -325,7 +319,7 @@ async def process_calc(message: types.Message):
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
 
-        exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
+        exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
         volume_l = int((length * width * height) / 1000)
         
@@ -343,11 +337,10 @@ async def process_calc(message: types.Message):
             f"🛠 **Аквариумная мастерская Reefland**\n\n"
             f"📐 **Размеры аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
             f"💧 **Объём:** ~{volume_l} л\n\n"
-            f"📊 **Расчетные данные:**\n"
+            f"📊 **Характеристики:**\n"
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
-            f"• Запас прочности: **k = {safety_factor}**\n"
             f"• Рёбра и стяжки: **{bracing_text}**\n\n"
-            f"⚖️ **Нагрузка и вес:**\n"
+            f"⚖️ **Вес конструкции:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
             f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
