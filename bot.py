@@ -109,8 +109,8 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА, ПРОГИБА И ЗАПАСА ПРОЧНОСТИ ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str, float]:
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
@@ -171,18 +171,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
-    # Расчет гидравлического прогиба длинной стенки (в мм)
-    q_pa = 1000 * 9.81 * (height_cm / 100.0)
-    E_pa = 70e9
-    nu = 0.22
-    t_m = recommended_size / 1000.0
-    D = (E_pa * (t_m ** 3)) / (12 * (1 - nu ** 2))
-    
-    alpha = 0.0028 if ratio >= 1.5 else 0.0018
-    deflection_m = alpha * (q_pa * ((length_cm / 100.0) ** 4)) / D
-    deflection_mm = round(deflection_m * 1000.0, 1)
-
-    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text, deflection_mm
+    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
 
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ УЧЕТА ПОЛЬЗОВАТЕЛЕЙ ---
@@ -321,7 +310,7 @@ async def process_calc(message: types.Message):
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
 
-        exact, rec, safety_factor, bracing_text, deflection_mm = calculate_glass_thickness(length, width, height)
+        exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
 
         volume_l = int((length * width * height) / 1000)
         
@@ -336,7 +325,6 @@ async def process_calc(message: types.Message):
             f"📊 **Расчетные данные:**\n"
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
             f"• Запас прочности: **k = {safety_factor}**\n"
-            f"• Расчетный прогиб стенки: **~{deflection_mm} мм**\n"
             f"• Рёбра и стяжки: **{bracing_text}**\n\n"
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
