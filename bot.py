@@ -175,11 +175,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # Корректный расчет запаса прочности для Rimless (базовый k = 2.4)
+    # Корректный расчет запаса прочности для Rimless (базовый k = 3.0)
     if exact_mm <= 0:
         safety_factor = 99.0
     else:
-        safety_factor = round(2.4 * (recommended_size / exact_mm) ** 2, 1)
+        safety_factor = round(3.0 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
