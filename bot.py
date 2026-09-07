@@ -109,39 +109,39 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
-def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
+# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА, ПРОГИБА И ЗАПАСА ПРОЧНОСТИ ---
+def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str, float]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
     if height_cm <= 30:
-        base_mm = 3.8
+        base_mm = 3.5
     elif height_cm <= 35:
-        base_mm = 4.8
+        base_mm = 4.5
     elif height_cm <= 40:
-        base_mm = 5.8
+        base_mm = 5.5
     elif height_cm <= 45:
-        base_mm = 7.0
+        base_mm = 6.5
     elif height_cm <= 50:
-        base_mm = 8.2
+        base_mm = 8.0
     elif height_cm <= 55:
-        base_mm = 9.8
+        base_mm = 9.5
     elif height_cm <= 60:
-        base_mm = 11.2
+        base_mm = 10.8
     else:
-        base_mm = height_cm * 0.20
+        base_mm = height_cm * 0.19
 
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
     elif ratio <= 1.5:
-        factor = 0.95 + (ratio - 1.0) * 0.12
+        factor = 0.95 + (ratio - 1.0) * 0.10
     elif ratio <= 2.0:
-        factor = 1.01 + (ratio - 1.5) * 0.15
+        factor = 1.00 + (ratio - 1.5) * 0.12
     elif ratio <= 2.5:
-        factor = 1.08 + (ratio - 2.0) * 0.12
+        factor = 1.06 + (ratio - 2.0) * 0.10
     else:
-        factor = 1.14 + (ratio - 2.5) * 0.10
+        factor = 1.11 + (ratio - 2.5) * 0.08
 
     exact_mm = base_mm * factor
 
@@ -153,17 +153,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    if length_cm >= 140 and height_cm >= 50 and recommended_size < 15:
+    if length_cm >= 160 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
-    elif length_cm >= 110 and height_cm >= 45 and recommended_size < 12:
+    elif length_cm >= 130 and height_cm >= 50 and recommended_size < 12:
         recommended_size = 12
-    elif length_cm >= 75 and height_cm >= 45 and recommended_size < 10:
-        recommended_size = 10
-    elif height_cm <= 25 and (length_cm >= 80 or width_cm >= 80) and recommended_size < 10:
+    elif length_cm >= 100 and height_cm >= 45 and recommended_size < 10:
         recommended_size = 10
 
     bracing_text = "Не требуются"
-    if length_cm >= 150 and recommended_size < 15:
+    if length_cm >= 140 and recommended_size < 15:
         bracing_text = "Рекомендуются рёбра жесткости"
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
@@ -173,7 +171,18 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
 
-    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
+    # Расчет гидравлического прогиба длинной стенки (в мм)
+    q_pa = 1000 * 9.81 * (height_cm / 100.0)
+    E_pa = 70e9
+    nu = 0.22
+    t_m = recommended_size / 1000.0
+    D = (E_pa * (t_m ** 3)) / (12 * (1 - nu ** 2))
+    
+    alpha = 0.0028 if ratio >= 1.5 else 0.0018
+    deflection_m = alpha * (q_pa * ((length_cm / 100.0) ** 4)) / D
+    deflection_mm = round(deflection_m * 1000.0, 1)
+
+    return round(exact_mm, 2), recommended_size, safety_factor, bracing_text, deflection_mm
 
 
 # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ УЧЕТА ПОЛЬЗОВАТЕЛЕЙ ---
@@ -312,7 +321,7 @@ async def process_calc(message: types.Message):
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
 
-        exact, rec, safety_factor, bracing_text = calculate_glass_thickness(length, width, height)
+        exact, rec, safety_factor, bracing_text, deflection_mm = calculate_glass_thickness(length, width, height)
 
         volume_l = int((length * width * height) / 1000)
         
@@ -327,6 +336,7 @@ async def process_calc(message: types.Message):
             f"📊 **Расчетные данные:**\n"
             f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite или М1)\n"
             f"• Запас прочности: **k = {safety_factor}**\n"
+            f"• Расчетный прогиб стенки: **~{deflection_mm} мм**\n"
             f"• Рёбра и стяжки: **{bracing_text}**\n\n"
             f"⚖️ **Нагрузка и вес:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
