@@ -16,10 +16,8 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
-# --- ВАШ TELEGRAM ID ДЛЯ ДОСТУПА К СТАТИСТИКЕ ---
 ADMIN_ID = 1318763491
 
-# Настройки для Webhook
 WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
 
@@ -30,14 +28,12 @@ dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
 
-# --- СТАТИСТИКА (в памяти бота) ---
 bot_stats = {
-    "users": {},  # Ключ: user_id, Значение: {"name": ..., "username": ..., "calculations": 0}
+    "users": {},
     "total_calculations": 0
 }
 
 
-# --- ПРОВЕРКА ПОДПИСКИ НА КАНАЛ ---
 async def check_user_subscription(user_id: int) -> bool:
     if not bot:
         return True
@@ -54,7 +50,6 @@ async def check_user_subscription(user_id: int) -> bool:
         return True
 
 
-# --- КЛАВИАТУРЫ ---
 def get_subscribe_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -109,12 +104,10 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА И ЗАПАСА ПРОЧНОСТИ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, float, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    # Базовая толщина от высоты
     if height_cm <= 30:
         base_mm = 3.5
     elif height_cm <= 35:
@@ -132,7 +125,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         base_mm = height_cm * 0.19
 
-    # Коэффициент соотношения длины и высоты
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.90
@@ -145,7 +137,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.11 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину относительно высоты (учитывает нагрузку на дно и швы)
     if width_cm > height_cm:
         w_h_ratio = width_cm / height_cm
         factor += (w_h_ratio - 1.0) * 0.15
@@ -160,13 +151,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Пороги безопасности по длине и ширине для открытых (Rimless) систем
     if length_cm >= 160 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
+        exact_mm = max(exact_mm, 12.2)
     elif length_cm >= 120 and (height_cm >= 50 or width_cm >= 60) and recommended_size < 12:
         recommended_size = 12
+        exact_mm = max(exact_mm, 10.3)
     elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
         recommended_size = 10
+        exact_mm = max(exact_mm, 8.2)
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
@@ -182,7 +175,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
 
-# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ УЧЕТА ПОЛЬЗОВАТЕЛЕЙ ---
 def register_user(user: types.User):
     user_id = user.id
     full_name = user.full_name or "Без имени"
@@ -199,7 +191,6 @@ def register_user(user: types.User):
         bot_stats["users"][user_id]["username"] = username
 
 
-# --- ХЕНДЛЕРЫ ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
