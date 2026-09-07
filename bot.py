@@ -114,6 +114,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
+    # Базовая толщина от высоты
     if height_cm <= 30:
         base_mm = 3.5
     elif height_cm <= 35:
@@ -144,10 +145,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.11 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину относительно длины (акцентирует нагрузку на дно и швы)
-    width_ratio = width_cm / length_cm
-    if width_ratio > 0.33:
-        factor += (width_ratio - 0.33) * 0.25
+    # Поправка на ширину относительно высоты (учитывает нагрузку на дно и швы)
+    if width_cm > height_cm:
+        w_h_ratio = width_cm / height_cm
+        factor += (w_h_ratio - 1.0) * 0.15
 
     exact_mm = base_mm * factor
 
@@ -159,11 +160,12 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
+    # Пороги безопасности по длине и ширине для открытых (Rimless) систем
     if length_cm >= 160 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
-    elif length_cm >= 130 and height_cm >= 50 and recommended_size < 12:
+    elif length_cm >= 120 and (height_cm >= 50 or width_cm >= 60) and recommended_size < 12:
         recommended_size = 12
-    elif length_cm >= 100 and height_cm >= 45 and recommended_size < 10:
+    elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
         recommended_size = 10
 
     bracing_text = "Не требуются"
