@@ -109,7 +109,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    # Базовая толщина от высоты
+    # Плавная шкала базовой толщины от высоты
     if height_cm <= 30:
         base_mm = 3.5
     elif height_cm <= 35:
@@ -119,31 +119,35 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 45:
         base_mm = 6.5
     elif height_cm <= 50:
-        base_mm = 8.0
+        base_mm = 7.8
     elif height_cm <= 55:
-        base_mm = 9.5
+        base_mm = 8.8
     elif height_cm <= 60:
+        base_mm = 9.8
+    elif height_cm <= 65:
         base_mm = 10.8
+    elif height_cm <= 70:
+        base_mm = 11.8
     else:
-        base_mm = height_cm * 0.19
+        base_mm = height_cm * 0.175
 
-    # Коэффициент соотношения длины и высоты
+    # Соотношение длины к высоте
     ratio = length_cm / height_cm
     if ratio <= 1.0:
-        factor = 0.90
+        factor = 0.85  # Оптимизация нагрузки для кубов
     elif ratio <= 1.5:
-        factor = 0.95 + (ratio - 1.0) * 0.10
+        factor = 0.90 + (ratio - 1.0) * 0.10
     elif ratio <= 2.0:
-        factor = 1.00 + (ratio - 1.5) * 0.12
+        factor = 0.95 + (ratio - 1.5) * 0.12
     elif ratio <= 2.5:
-        factor = 1.06 + (ratio - 2.0) * 0.10
+        factor = 1.01 + (ratio - 2.0) * 0.10
     else:
-        factor = 1.11 + (ratio - 2.5) * 0.08
+        factor = 1.06 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину
-    if width_cm > height_cm:
+    # Поправка на ширину только при сильном превышении высоты
+    if width_cm > height_cm + 10:
         w_h_ratio = width_cm / height_cm
-        factor += (w_h_ratio - 1.0) * 0.15
+        factor += (w_h_ratio - 1.0) * 0.08
 
     exact_mm = base_mm * factor
 
@@ -155,23 +159,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Динамические пороги безопасности для Rimless-систем с учетом ширины
-    if length_cm >= 150 and height_cm >= 55 and recommended_size < 15:
-        recommended_size = 15
-        base_thresh = 11.5 + (width_cm * 0.015)
-        exact_mm = max(exact_mm, base_thresh)
-    elif length_cm >= 120 and height_cm >= 60 and recommended_size < 15:
-        recommended_size = 15
-        base_thresh = 11.0 + (width_cm * 0.015)
-        exact_mm = max(exact_mm, base_thresh)
-    elif ((length_cm >= 100 and height_cm >= 50) or length_cm >= 120) and recommended_size < 12:
-        recommended_size = 12
-        base_thresh = (8.7 + (width_cm * 0.02)) if length_cm >= 120 else (8.0 + (width_cm * 0.02))
-        exact_mm = max(exact_mm, base_thresh)
-    elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
-        recommended_size = 10
-        base_thresh = 6.2 + (width_cm * 0.015)
-        exact_mm = max(exact_mm, base_thresh)
+    # Жесткие пороги перехода на 15 мм только для действительно габаритных аквариумов
+    if (length_cm >= 150 and height_cm >= 55) or (length_cm >= 120 and height_cm >= 60) or height_cm >= 75:
+        if recommended_size < 15:
+            recommended_size = 15
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
@@ -179,7 +170,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # Расчет запаса прочности для Rimless
+    # Расчет запаса прочности
     if exact_mm <= 0:
         safety_factor = 99.0
     else:
