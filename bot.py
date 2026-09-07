@@ -134,7 +134,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     # Соотношение длины к высоте
     ratio = length_cm / height_cm
     if ratio <= 1.0:
-        factor = 0.85  # Оптимизация нагрузки для кубов
+        factor = 0.85
     elif ratio <= 1.5:
         factor = 0.90 + (ratio - 1.0) * 0.10
     elif ratio <= 2.0:
@@ -144,7 +144,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.06 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину только при сильном превышении высоты
+    # Поправка на ширину
     if width_cm > height_cm + 10:
         w_h_ratio = width_cm / height_cm
         factor += (w_h_ratio - 1.0) * 0.08
@@ -159,10 +159,20 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Жесткие пороги перехода на 15 мм только для действительно габаритных аквариумов
+    # Жесткие защитные пороги для бескаркасных аквариумов (Rimless)
     if (length_cm >= 150 and height_cm >= 55) or (length_cm >= 120 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
             recommended_size = 15
+    elif (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45):
+        if recommended_size < 12:
+            recommended_size = 12
+    elif length_cm >= 80 or height_cm >= 40:
+        if recommended_size < 8:
+            recommended_size = 8
+
+    # Специальный порог для длин от 100 см
+    if length_cm >= 100 and recommended_size < 10 and height_cm >= 40:
+        recommended_size = 10
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
@@ -170,11 +180,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
-    # Расчет запаса прочности
+    # Расчет запаса прочности k (согласно нормам для силикатного стекла)
     if exact_mm <= 0:
         safety_factor = 99.0
     else:
-        safety_factor = round(3.0 * (recommended_size / exact_mm) ** 2, 1)
+        safety_factor = round(3.0 * ((recommended_size / exact_mm) ** 2), 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
