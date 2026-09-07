@@ -117,7 +117,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif height_cm <= 40:
         base_mm = 5.5
     elif height_cm <= 45:
-        base_mm = 6.5
+        base_mm = 6.2
     elif height_cm <= 50:
         base_mm = 7.8
     elif height_cm <= 55:
@@ -168,19 +168,19 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         if recommended_size < 15:
             recommended_size = 15  # 120х60х60 и крупнее -> 15 мм
     elif (115 <= length_cm <= 125) and (width_cm <= 55) and (42 <= height_cm <= 60):
-        recommended_size = 12  # 120х50х60, 120х45х45 -> 12 мм
+        recommended_size = 12  # 120х50х60 -> 12 мм
     elif (height_cm >= 60) or (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45):
         if recommended_size < 12:
-            recommended_size = 12  # Высота от 60 см (70х60х60, 90х60х60) -> 12 мм
+            recommended_size = 12  # Высота от 60 см -> 12 мм
     elif (length_cm >= 70 and height_cm >= 45) or (width_cm >= 50 and height_cm >= 50):
         if recommended_size < 10:
             recommended_size = 10  # 70х50х50, 80х50х50, 90х50х50 -> 10 мм
-    elif (length_cm >= 80) or (height_cm >= 45) or (length_cm >= 60 and height_cm >= 40):
+    elif (length_cm >= 60 and height_cm >= 40) or (length_cm >= 80 and height_cm >= 40) or height_cm > 45:
         if recommended_size < 8:
-            recommended_size = 8   # 80х40х40, 60х40х40 -> 8 мм
-    elif (length_cm >= 40 or height_cm >= 35):
+            recommended_size = 8   # 60х40х40, 80х40х40, или высота строго > 45 см -> 8 мм
+    elif (length_cm >= 30 or height_cm >= 30):
         if recommended_size < 6:
-            recommended_size = 6   # 40х40х40, 45х45х45, 30х30х35 -> 6 мм
+            recommended_size = 6   # 30х30х30, 40х40х40, 45х45х45 -> 6 мм
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
