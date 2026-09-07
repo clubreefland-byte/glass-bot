@@ -175,9 +175,12 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif (length_cm >= 70 and height_cm >= 45) or (width_cm >= 50 and height_cm >= 50):
         if recommended_size < 10:
             recommended_size = 10  # 70х50х50, 80х50х50, 90х50х50 -> 10 мм
-    elif length_cm >= 80 or height_cm >= 40:
+    elif (length_cm >= 80) or (height_cm >= 45) or (length_cm >= 60 and height_cm >= 40):
         if recommended_size < 8:
-            recommended_size = 8
+            recommended_size = 8   # 80х40х40, 60х40х40 -> 8 мм
+    elif (length_cm >= 40 or height_cm >= 35):
+        if recommended_size < 6:
+            recommended_size = 6   # 40х40х40, 45х45х45, 30х30х35 -> 6 мм
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
