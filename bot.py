@@ -140,7 +140,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.11 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину относительно высоты
+    # Поправка на ширину
     if width_cm > height_cm:
         w_h_ratio = width_cm / height_cm
         factor += (w_h_ratio - 1.0) * 0.15
@@ -155,16 +155,19 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Пороги безопасности для открытых (Rimless) систем
+    # Жесткие пороги безопасности для Rimless-систем
     if length_cm >= 150 and height_cm >= 55 and recommended_size < 15:
         recommended_size = 15
         exact_mm = max(exact_mm, 12.2)
+    elif length_cm >= 120 and height_cm >= 60 and recommended_size < 15:
+        recommended_size = 15
+        exact_mm = max(exact_mm, 11.8)
     elif ((length_cm >= 100 and height_cm >= 50) or length_cm >= 120) and recommended_size < 12:
         recommended_size = 12
-        exact_mm = max(exact_mm, 10.3)
+        exact_mm = max(exact_mm, 9.6 if length_cm >= 120 else 8.8)
     elif length_cm >= 90 and height_cm >= 40 and recommended_size < 10:
         recommended_size = 10
-        exact_mm = max(exact_mm, 8.2)
+        exact_mm = max(exact_mm, 6.8)
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
@@ -172,10 +175,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
 
+    # Корректный расчет запаса прочности для Rimless (базовый k = 2.4)
     if exact_mm <= 0:
         safety_factor = 99.0
     else:
-        safety_factor = round(3.8 * (recommended_size / exact_mm) ** 2, 1)
+        safety_factor = round(2.4 * (recommended_size / exact_mm) ** 2, 1)
 
     return round(exact_mm, 2), recommended_size, safety_factor, bracing_text
 
