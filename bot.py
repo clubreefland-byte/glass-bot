@@ -8,6 +8,7 @@ from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
 # Логирование
@@ -475,17 +476,6 @@ async def handle_ping(request):
     return web.Response(text="OK", status=200)
 
 
-async def handle_webhook(request: web.Request):
-    try:
-        data = await request.json()
-        telegram_update = types.Update(**data)
-        await dp.feed_update(bot=bot, update=telegram_update)
-        return web.Response(text="OK", status=200)
-    except Exception as e:
-        logging.error(f"Ошибка обработки вебхука: {e}")
-        return web.Response(text="Error", status=500)
-
-
 def main():
     if not BOT_TOKEN:
         logging.error("ОШИБКА: BOT_TOKEN не задан!")
@@ -493,8 +483,15 @@ def main():
 
     app = web.Application()
     app.router.add_get("/", handle_ping)
-    app.router.add_post(WEBHOOK_PATH, handle_webhook)
 
+    # Стандартный официальный обработчик вебхуков aiogram 3
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    )
+    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+
+    setup_application(app, dp, bot=bot)
     app.on_startup.append(on_startup)
 
     logging.info(f"Запуск веб-сервера на порту {PORT}...")
