@@ -91,8 +91,9 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
 
-    lead_payload = f"lead_{l_int}_{w_int}_{h_int}_{r_int}"
-    share_payload = f"share_{l_int}_{w_int}_{h_int}_{r_int}"
+    # Короткие ключи для соблюдения лимита 64 байт в callback_data
+    lead_payload = f"ld_{l_int}_{w_int}_{h_int}_{r_int}"
+    share_payload = f"sh_{l_int}_{w_int}_{h_int}_{r_int}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -253,7 +254,6 @@ async def cmd_stats(message: types.Message):
     lead_clicks = bot_stats.get("lead_clicks", 0)
     share_clicks = bot_stats.get("share_clicks", 0)
 
-    # Топ-10 популярных размеров
     pop_sizes = sorted(bot_stats.get("popular_sizes", {}).items(), key=lambda x: x[1], reverse=True)[:10]
     
     if pop_sizes:
@@ -309,7 +309,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
 
 
-@dp.callback_query(lambda c: c.data.startswith("lead_"))
+@dp.callback_query(lambda c: c.data.startswith("ld_"))
 async def process_lead_click(callback: types.CallbackQuery):
     user = callback.from_user
     register_user(user)
@@ -334,7 +334,7 @@ async def process_lead_click(callback: types.CallbackQuery):
         )
 
 
-@dp.callback_query(lambda c: c.data.startswith("share_"))
+@dp.callback_query(lambda c: c.data.startswith("sh_"))
 async def process_share_click(callback: types.CallbackQuery):
     user = callback.from_user
     register_user(user)
@@ -343,7 +343,6 @@ async def process_share_click(callback: types.CallbackQuery):
     if len(parts) == 5:
         l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
 
-        # Фиксируем шеринг
         bot_stats["share_clicks"] = bot_stats.get("share_clicks", 0) + 1
 
         share_text = quote(
@@ -393,7 +392,6 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоперевод из миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
@@ -405,7 +403,6 @@ async def process_calc(message: types.Message):
 
         exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
-        # Обновляем локальную статистику
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
         
