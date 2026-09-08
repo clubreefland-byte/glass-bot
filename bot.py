@@ -19,7 +19,8 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 ADMIN_ID = 1318763491
 
-WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
+# Фиксированный путь вебхука предотвращает проблемы с двоеточием в токене
+WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
 
 PORT = int(os.getenv("PORT", 10000))
@@ -378,6 +379,8 @@ async def process_calc(message: types.Message):
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
+        # Автоматический сброс старых зависших обновлений и установка нового вебхука
+        await bot.delete_webhook(drop_pending_updates=True)
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
         logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
     else:
