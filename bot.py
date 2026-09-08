@@ -144,7 +144,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
         (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
-        (120, 60, 60): 15, # Чистый открытый аквариум
+        (120, 60, 60): 15, (150, 60, 50): 15,
         (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
         (180, 60, 60): 15, (180, 70, 70): 15, (200, 60, 60): 15, (200, 70, 70): 15
     }
@@ -192,7 +192,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
 
-    if max_side >= 160 or (rec_mm == 15 and max_side >= 150) or height_cm >= 70:
+    if rec_mm == 15 and height_cm <= 52:
+        bracing_text = "Не требуются"
+    elif max_side >= 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
         bracing_text = "Требуются рёбра жесткости и стяжки"
     elif max_side >= 130 or (height_cm >= 65 and rec_mm < 15):
         bracing_text = "Рекомендуются рёбра жесткости"
