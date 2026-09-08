@@ -19,8 +19,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 ADMIN_ID = 1318763491
 
-# Безопасный путь для вебхука без двоеточия в роутере aiohttp
-WEBHOOK_PATH = "/webhook"
+WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
 
 PORT = int(os.getenv("PORT", 10000))
@@ -129,7 +128,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     w = int(round(width_cm))
     h = int(round(height_cm))
 
+    # 1. Жесткая база точных стандартов Reefland (Д, Ш, В)
     EXACT_STANDARDS = {
+        # Кубическая линейка
         (30, 30, 30): 6, 
         (40, 40, 40): 6, 
         (45, 45, 45): 8, 
@@ -138,6 +139,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (70, 70, 70): 12,
         (80, 80, 80): 15,
         
+        # Прямоугольные стандарты
         (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
         (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
@@ -156,6 +158,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif key_swapped in EXACT_STANDARDS:
         rec_mm = EXACT_STANDARDS[key_swapped]
     else:
+        # 2. Правила расчёта для произвольных/нестандартных размеров
         max_side = max(length_cm, width_cm)
 
         if height_cm <= 35:
@@ -186,9 +189,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         else:
             rec_mm = 19
 
+    # Определение требований к рёбрам и стяжкам
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
 
+    # Открытый аквариум из 15 мм допустим строго ДО 150 см длины при высоте <= 52 см
     if rec_mm == 15 and height_cm <= 52 and max_side <= 150:
         bracing_text = "Не требуются"
     elif max_side >= 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
@@ -321,6 +326,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
+        # Автоперевод из миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
@@ -372,7 +378,6 @@ async def process_calc(message: types.Message):
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
-        await bot.delete_webhook(drop_pending_updates=True)
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
         logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
     else:
