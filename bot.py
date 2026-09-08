@@ -5,7 +5,7 @@ from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
@@ -89,16 +89,8 @@ def get_result_keyboard(length, width, height, rec):
     # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Текст для отправки друзьям / в чаты
-    share_text = (
-        f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
-        f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
-        f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
-    )
-    
-    # Ссылка на бота в url и текст в text обеспечивают стабильную работу кнопки на ПК и телефонах
-    bot_link = "https://t.me/AquaGlassCalcBot"
-    share_url = f"https://t.me/share/url?url={quote(bot_link)}&text={quote(share_text)}"
+    # Параметр для inline-шеринга без лишних URL
+    inline_share_query = f"{l_int}_{w_int}_{h_int}_{r_int}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -111,7 +103,7 @@ def get_result_keyboard(length, width, height, rec):
             [
                 InlineKeyboardButton(
                     text="📤 Поделиться результатом", 
-                    url=share_url
+                    switch_inline_query=inline_share_query
                 )
             ],
             [
@@ -124,12 +116,46 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
+# --- ОБРАБОТЧИК ИНЛАЙН-ШЕРИНГА БЕЗ ССЫЛОК ВВЕРХУ ---
+@dp.inline_query()
+async def process_inline_share(inline_query: types.InlineQuery):
+    query_str = inline_query.query.strip()
+    
+    if not query_str:
+        return
+
+    try:
+        parts = query_str.split("_")
+        if len(parts) == 4:
+            l_int, w_int, h_int, r_int = parts
+            
+            # Чистый текст сообщения
+            share_text = (
+                f"📐 **Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!**\n"
+                f"Рекомендуемая толщина: **{r_int} мм** (Optiwhite / М1).\n\n"
+                f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
+            )
+
+            result = InlineQueryResultArticle(
+                id="share_calc",
+                title=f"Отправить результат: {l_int}×{w_int}×{h_int} см ({r_int} мм)",
+                description="Чистый расчет без лишних ссылок вверху",
+                input_message_content=InputTextMessageContent(
+                    message_text=share_text,
+                    parse_mode="Markdown"
+                )
+            )
+
+            await bot.answer_inline_query(inline_query.id, results=[result], cache_time=1)
+    except Exception as e:
+        logging.error(f"Ошибка при обработке inline query: {e}")
+
+
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    # Плавная шкала базовой толщины от высоты
     if height_cm <= 30:
         base_mm = 3.5
     elif height_cm <= 35:
@@ -151,7 +177,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         base_mm = height_cm * 0.175
 
-    # Соотношение длины к высоте
     ratio = length_cm / height_cm
     if ratio <= 1.0:
         factor = 0.85
@@ -164,7 +189,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         factor = 1.06 + (ratio - 2.5) * 0.08
 
-    # Поправка на ширину
     if width_cm > height_cm + 10:
         w_h_ratio = width_cm / height_cm
         factor += (w_h_ratio - 1.0) * 0.08
@@ -179,11 +203,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = size
             break
 
-    # Порог мастерской: минимум 6 мм при длине или ширине от 50 см
     if (length_cm >= 50 or width_cm >= 50) and recommended_size < 6:
         recommended_size = 6
 
-    # Экспертные пороги для бескаркасных систем (Rimless) по стандарту мастерской
     if (length_cm >= 150 and height_cm >= 60) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
             recommended_size = 15
@@ -347,7 +369,6 @@ async def process_calc(message: types.Message):
 
         volume_l = int((length * width * height) / 1000)
         
-        # Точный расчет площади в м²
         l_m = length / 100.0
         w_m = width / 100.0
         h_m = height / 100.0
