@@ -35,7 +35,6 @@ bot_stats = {
     "users": {},
     "total_calculations": 0,
     "lead_clicks": 0,
-    "share_clicks": 0,
     "popular_sizes": {}
 }
 
@@ -89,31 +88,31 @@ def get_start_keyboard():
 
 
 def get_result_keyboard(length, width, height, rec):
-    # Приводим к целочисленным сантиметрам для строгого соблюдения лимита Telegram (до 64 байт)
-    l_val = length / 10.0 if length > 300 else length
-    w_val = width / 10.0 if width > 300 else width
-    h_val = height / 10.0 if height > 300 else height
+    l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
+    
+    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    l_int = int(round(l_val))
-    w_int = int(round(w_val))
-    h_int = int(round(h_val))
-    r_int = int(round(rec))
+    share_text = quote(
+        f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
+        f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1)."
+    )
 
-    lead_payload = f"ld_{l_int}_{w_int}_{h_int}_{r_int}"
-    share_payload = f"sh_{l_int}_{w_int}_{h_int}_{r_int}"
+    share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
+
+    callback_payload = f"lead_{l_int}_{w_int}_{h_int}_{r_int}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
-                    callback_data=lead_payload
+                    callback_data=callback_payload
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="📤 Поделиться результатом", 
-                    callback_data=share_payload
+                    url=share_url
                 )
             ],
             [
@@ -259,8 +258,8 @@ async def cmd_stats(message: types.Message):
     total_users = len(bot_stats["users"])
     total_calcs = bot_stats["total_calculations"]
     lead_clicks = bot_stats.get("lead_clicks", 0)
-    share_clicks = bot_stats.get("share_clicks", 0)
 
+    # Топ-10 популярных размеров
     pop_sizes = sorted(bot_stats.get("popular_sizes", {}).items(), key=lambda x: x[1], reverse=True)[:10]
     
     if pop_sizes:
@@ -274,8 +273,7 @@ async def cmd_stats(message: types.Message):
         "📈 **Статистика калькулятора Reefland:**\n\n"
         f"👥 Пользователей: **{total_users}**\n"
         f"📐 Всего расчетов: **{total_calcs}**\n"
-        f"📩 Кликов «Узнать стоимость»: **{lead_clicks}** (Конверсия: **{conversion}%**)\n"
-        f"📤 Кликов «Поделиться»: **{share_clicks}**\n\n"
+        f"📩 Кликов «Узнать стоимость»: **{lead_clicks}** (Конверсия: **{conversion}%**)\n\n"
         f"🔥 **Топ-10 запрашиваемых размеров:**\n{pop_sizes_text}\n\n"
         "👤 **Активность пользователей:**\n"
     )
@@ -316,7 +314,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
 
 
-@dp.callback_query(lambda c: c.data.startswith("ld_"))
+@dp.callback_query(lambda c: c.data.startswith("lead_"))
 async def process_lead_click(callback: types.CallbackQuery):
     user = callback.from_user
     register_user(user)
@@ -325,6 +323,7 @@ async def process_lead_click(callback: types.CallbackQuery):
     if len(parts) == 5:
         l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
 
+        # Фиксируем клик в локальной статистике
         bot_stats["lead_clicks"] = bot_stats.get("lead_clicks", 0) + 1
 
         calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l}х{w}х{h}см%20из%20стекла%20{rec}мм."
@@ -336,33 +335,6 @@ async def process_lead_click(callback: types.CallbackQuery):
             f"Для согласования деталей и расчета стоимости нажмите на кнопку ниже:",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text="💬 Написать мастеру в Telegram", url=target_url)]]
-            ),
-            parse_mode="Markdown"
-        )
-
-
-@dp.callback_query(lambda c: c.data.startswith("sh_"))
-async def process_share_click(callback: types.CallbackQuery):
-    user = callback.from_user
-    register_user(user)
-
-    parts = callback.data.split("_")
-    if len(parts) == 5:
-        l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
-
-        bot_stats["share_clicks"] = bot_stats.get("share_clicks", 0) + 1
-
-        share_text = quote(
-            f"📐 Я рассчитал толщину стекла для аквариума {l}×{w}×{h} см!\n"
-            f"Рекомендуемая толщина: {rec} мм (Optiwhite / М1)."
-        )
-        share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
-
-        await callback.answer()
-        await callback.message.answer(
-            "📤 **Нажмите кнопку ниже, чтобы переслать результат в чат или другу:**",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text="📲 Отправить в Telegram", url=share_url)]]
             ),
             parse_mode="Markdown"
         )
@@ -399,7 +371,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Приводим к см, если пользователь ввел в миллиметрах (>300)
+        # Автоперевод из миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
@@ -411,6 +383,7 @@ async def process_calc(message: types.Message):
 
         exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
+        # Обновляем локальную статистику
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
         
