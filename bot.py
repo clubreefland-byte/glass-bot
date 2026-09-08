@@ -89,13 +89,15 @@ def get_start_keyboard():
 
 
 def get_result_keyboard(length, width, height, rec):
-    # Если введены мм (>300), приводим к см для гарантированного соблюдения лимита 64 байт в callback_data
-    if length > 300 or width > 300 or height > 300:
-        length /= 10.0
-        width /= 10.0
-        height /= 10.0
+    # Приводим к целочисленным сантиметрам для строгого соблюдения лимита Telegram (до 64 байт)
+    l_val = length / 10.0 if length > 300 else length
+    w_val = width / 10.0 if width > 300 else width
+    h_val = height / 10.0 if height > 300 else height
 
-    l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
+    l_int = int(round(l_val))
+    w_int = int(round(w_val))
+    h_int = int(round(h_val))
+    r_int = int(round(rec))
 
     lead_payload = f"ld_{l_int}_{w_int}_{h_int}_{r_int}"
     share_payload = f"sh_{l_int}_{w_int}_{h_int}_{r_int}"
@@ -397,7 +399,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Приводим к см, если введены мм (>300)
+        # Приводим к см, если пользователь ввел в миллиметрах (>300)
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
