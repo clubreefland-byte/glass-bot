@@ -10,18 +10,14 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
-
 ADMIN_ID = 1318763491
 
 WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
-
 PORT = int(os.getenv("PORT", 10000))
 
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
@@ -44,7 +40,6 @@ async def check_user_subscription(user_id: int) -> bool:
             return True
         return False
     except TelegramBadRequest:
-        logging.error("Не удалось проверить подписку.")
         return True 
     except Exception as e:
         logging.error(f"Ошибка проверки подписки: {e}")
@@ -54,18 +49,8 @@ async def check_user_subscription(user_id: int) -> bool:
 def get_subscribe_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📢 Подписаться на Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔄 Проверить подписку", 
-                    callback_data="check_sub"
-                )
-            ]
+            [InlineKeyboardButton(text="📢 Подписаться на Reefland", url="https://t.me/club_reefland")],
+            [InlineKeyboardButton(text="🔄 Проверить подписку", callback_data="check_sub")]
         ]
     )
 
@@ -73,133 +58,89 @@ def get_subscribe_keyboard():
 def get_start_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📢 Канал Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ]
+            [InlineKeyboardButton(text="📢 Канал Reefland", url="https://t.me/club_reefland")]
         ]
     )
 
 
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-    
-    # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Текст для шеринга
     share_text = quote(
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1)."
     )
-
     share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📩 Узнать стоимость изготовления", 
-                    url=f"https://t.me/Asteriy78{calc_data}"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📤 Поделиться результатом", 
-                    url=share_url
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="📢 Канал Reefland", 
-                    url="https://t.me/club_reefland"
-                )
-            ]
+            [InlineKeyboardButton(text="📩 Узнать стоимость изготовления", url=f"https://t.me/Asteriy78{calc_data}")],
+            [InlineKeyboardButton(text="📤 Поделиться результатом", url=share_url)],
+            [InlineKeyboardButton(text="📢 Канал Reefland", url="https://t.me/club_reefland")]
         ]
     )
 
 
-# --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
+# --- ЧИСТАЯ ТАБЛИЧНАЯ ЛОГИКА РАСЧЕТА ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    if height_cm <= 30:
-        base_mm = 3.5
-    elif height_cm <= 35:
-        base_mm = 4.5
-    elif height_cm <= 40:
-        base_mm = 5.5
+    # Используем наибольшую горизонтальную сторону как основную для расчета прогиба
+    max_side = max(length_cm, width_cm)
+    rec_mm = 6  # базовый минимум
+
+    if height_cm <= 35:
+        if max_side <= 60:
+            rec_mm = 6
+        elif max_side <= 90:
+            rec_mm = 8
+        else:
+            rec_mm = 10
+
     elif height_cm <= 45:
-        base_mm = 6.2
-    elif height_cm <= 50:
-        base_mm = 7.8
-    elif height_cm <= 55:
-        base_mm = 8.8
-    elif height_cm <= 60:
-        base_mm = 9.8
-    elif height_cm <= 65:
-        base_mm = 10.8
-    elif height_cm <= 70:
-        base_mm = 11.8
+        if max_side <= 50:
+            rec_mm = 6
+        elif max_side <= 80:
+            rec_mm = 8
+        elif max_side <= 110:
+            rec_mm = 10
+        else:
+            rec_mm = 12
+
+    elif height_cm <= 52:
+        if max_side <= 50:
+            rec_mm = 8
+        elif max_side <= 90:
+            rec_mm = 10
+        elif max_side <= 135:
+            rec_mm = 12
+        else:
+            rec_mm = 15
+
+    elif height_cm <= 62:
+        if max_side <= 85:
+            rec_mm = 12
+        else:
+            rec_mm = 15
+
+    elif height_cm <= 72:
+        if max_side <= 120:
+            rec_mm = 15
+        else:
+            rec_mm = 19
     else:
-        base_mm = height_cm * 0.175
+        rec_mm = 19
 
-    ratio = length_cm / height_cm
-    if ratio <= 1.0:
-        factor = 0.85
-    elif ratio <= 1.5:
-        factor = 0.90 + (ratio - 1.0) * 0.10
-    elif ratio <= 2.0:
-        factor = 0.95 + (ratio - 1.5) * 0.12
-    elif ratio <= 2.5:
-        factor = 1.01 + (ratio - 2.0) * 0.10
-    else:
-        factor = 1.06 + (ratio - 2.5) * 0.08
-
-    if width_cm > height_cm + 10:
-        w_h_ratio = width_cm / height_cm
-        factor += (w_h_ratio - 1.0) * 0.08
-
-    exact_mm = base_mm * factor
-
-    standard_sizes = [4, 5, 6, 8, 10, 12, 15, 19, 25]
-    recommended_size = standard_sizes[-1]
-    
-    for size in standard_sizes:
-        if size + 0.05 >= exact_mm:
-            recommended_size = size
-            break
-
-    if (length_cm >= 50 or width_cm >= 50) and recommended_size < 6:
-        recommended_size = 6
-
-    # Жесткие ограничения под открытые аквариумы Reefland
-    if (length_cm >= 150 and height_cm >= 50) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
-        if recommended_size < 15:
-            recommended_size = 15
-    elif (length_cm >= 120 and height_cm >= 50) or (length_cm >= 100 and height_cm >= 60) or height_cm > 60:
-        if recommended_size < 12:
-            recommended_size = 12
-    elif (length_cm >= 60 and height_cm >= 50) or (width_cm >= 60 and height_cm >= 50) or (length_cm >= 70 and height_cm >= 45):
-        if recommended_size < 10:
-            recommended_size = 10
-    elif (length_cm >= 50 and height_cm >= 40) or (length_cm >= 60 and height_cm >= 40) or (length_cm >= 80 and height_cm >= 40) or height_cm > 45:
-        if recommended_size < 8:
-            recommended_size = 8
-    elif (length_cm >= 30 or height_cm >= 30):
-        if recommended_size < 6:
-            recommended_size = 6
-
+    # Рёбра жесткости
     bracing_text = "Не требуются"
-    if length_cm >= 160 and recommended_size < 15:
+    if max_side >= 160 and rec_mm < 15:
         bracing_text = "Рекомендуются рёбра жесткости"
-    elif length_cm >= 180:
-        bracing_text = "Требуются рёбра жесткости и стяжка"
+    elif max_side >= 180:
+        bracing_text = "Требуются рёбра жесткости и стяжки"
 
-    return round(exact_mm, 2), recommended_size, bracing_text
+    return float(rec_mm), rec_mm, bracing_text
 
 
 def register_user(user: types.User):
@@ -208,11 +149,7 @@ def register_user(user: types.User):
     username = f"@{user.username}" if user.username else "нет username"
     
     if user_id not in bot_stats["users"]:
-        bot_stats["users"][user_id] = {
-            "name": full_name,
-            "username": username,
-            "calculations": 0
-        }
+        bot_stats["users"][user_id] = {"name": full_name, "username": username, "calculations": 0}
     else:
         bot_stats["users"][user_id]["name"] = full_name
         bot_stats["users"][user_id]["username"] = username
@@ -262,14 +199,8 @@ async def cmd_stats(message: types.Message):
     else:
         user_lines = []
         for uid, data in list(bot_stats["users"].items())[-20:]:
-            name = data["name"]
-            username = data["username"]
-            calcs = data["calculations"]
-            user_lines.append(f"• {name} ({username}) — расчетов: {calcs}")
-        
+            user_lines.append(f"• {data['name']} ({data['username']}) — расчетов: {data['calculations']}")
         stats_text += "\n".join(user_lines)
-        if total_users > 20:
-            stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
 
     await message.answer(stats_text, parse_mode="Markdown")
 
@@ -324,7 +255,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоперевод из миллиметров в сантиметры
+        # Автоперевод миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
@@ -370,16 +301,13 @@ async def process_calc(message: types.Message):
     except ValueError as ve:
         await message.answer(f"❌ Ошибка в данных: {ve}")
     except Exception as e:
-        logging.error(f"Непредвиденная ошибка при расчете для юзера {user_id}: {e}")
-        await message.answer("❌ Произошла ошибка при вычислении. Проверьте правильность введенных чисел.")
+        logging.error(f"Ошибка при расчете: {e}")
+        await message.answer("❌ Произошла ошибка при вычислении.")
 
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
-        logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
-    else:
-        logging.warning("WEBHOOK_URL не задан или бот не инициализирован!")
 
 
 async def handle_ping(request):
@@ -388,22 +316,17 @@ async def handle_ping(request):
 
 def main():
     if not BOT_TOKEN:
-        logging.error("ОШИБКА: BOT_TOKEN не задан!")
         return
 
     app = web.Application()
     app.router.add_get("/", handle_ping)
 
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-    )
+    webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
     webhook_requests_handler.register(app, path=WEBHOOK_PATH)
 
     setup_application(app, dp, bot=bot)
     app.on_startup.append(on_startup)
 
-    logging.info(f"Запуск веб-сервера на порту {PORT}...")
     web.run_app(app, host="0.0.0.0", port=PORT)
 
 
