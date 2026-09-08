@@ -5,13 +5,15 @@ from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
+# Логирование
 logging.basicConfig(level=logging.INFO)
 
+# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
@@ -84,8 +86,18 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     
+    # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
-    inline_share_query = f"{l_int}_{w_int}_{h_int}_{r_int}"
+
+    # Текст для шеринга
+    share_text = quote(
+        f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
+        f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
+        f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
+    )
+
+    # Точка в url убирает синюю ссылку сверху в десктоп-версии и мобильных приложениях
+    share_url = f"https://t.me/share/url?url=.&text={share_text}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -98,7 +110,7 @@ def get_result_keyboard(length, width, height, rec):
             [
                 InlineKeyboardButton(
                     text="📤 Поделиться результатом", 
-                    switch_inline_query=inline_share_query
+                    url=share_url
                 )
             ],
             [
@@ -109,40 +121,6 @@ def get_result_keyboard(length, width, height, rec):
             ]
         ]
     )
-
-
-# --- ОБРАБОТЧИК ИНЛАЙН-ЗАПРОСА ---
-@dp.inline_query()
-async def process_inline_share(inline_query: types.InlineQuery):
-    query_str = inline_query.query.strip()
-    
-    if not query_str:
-        return
-
-    try:
-        parts = query_str.split("_")
-        if len(parts) == 4:
-            l_int, w_int, h_int, r_int = parts
-            
-            share_text = (
-                f"📐 **Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!**\n"
-                f"Рекомендуемая толщина: **{r_int} мм** (Optiwhite / М1).\n\n"
-                f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
-            )
-
-            result = InlineQueryResultArticle(
-                id=f"share_{query_str}",
-                title=f"Отправить результат: {l_int}×{w_int}×{h_int} см ({r_int} мм)",
-                description="Нажмите, чтобы отправить карточку без лишних ссылок",
-                input_message_content=InputTextMessageContent(
-                    message_text=share_text,
-                    parse_mode="Markdown"
-                )
-            )
-
-            await inline_query.answer(results=[result], cache_time=1)
-    except Exception as e:
-        logging.error(f"Ошибка при обработке inline query: {e}")
 
 
 # --- АЛГОРИТМ РАСЧЕТА ТОЛЩИНЫ СТЕКЛА ---
