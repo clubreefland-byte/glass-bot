@@ -95,7 +95,6 @@ def get_result_keyboard(length, width, height, rec):
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1)."
     )
 
-    # Валидный URL бота делает кнопку кликабельной на всех устройствах
     share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
 
     return InlineKeyboardMarkup(
@@ -177,10 +176,11 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     if (length_cm >= 50 or width_cm >= 50) and recommended_size < 6:
         recommended_size = 6
 
-    if (length_cm >= 150 and height_cm >= 60) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
+    # Жесткие ограничения под открытые аквариумы Reefland
+    if (length_cm >= 150 and height_cm >= 50) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
             recommended_size = 15
-    elif (length_cm >= 70 and height_cm >= 60) or (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45) or height_cm > 60:
+    elif (length_cm >= 120 and height_cm >= 50) or (length_cm >= 100 and height_cm >= 60) or height_cm > 60:
         if recommended_size < 12:
             recommended_size = 12
     elif (length_cm >= 60 and height_cm >= 50) or (width_cm >= 60 and height_cm >= 50) or (length_cm >= 70 and height_cm >= 45):
@@ -194,7 +194,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             recommended_size = 6
 
     bracing_text = "Не требуются"
-    if length_cm >= 140 and recommended_size < 15:
+    if length_cm >= 160 and recommended_size < 15:
         bracing_text = "Рекомендуются рёбра жесткости"
     elif length_cm >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжка"
@@ -324,6 +324,7 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
+        # Автоперевод из миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
