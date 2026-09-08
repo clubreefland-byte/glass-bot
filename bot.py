@@ -89,11 +89,11 @@ def get_result_keyboard(length, width, height, rec):
     # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Текст для шеринга с друзьями / в чатах
+    # Чистый текст для шеринга без громоздкой ссылки
     share_text = (
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
-        f"Рассчитай свой аквариум в калькуляторе:"
+        f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
     )
     share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={quote(share_text)}"
 
