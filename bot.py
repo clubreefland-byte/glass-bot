@@ -128,15 +128,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     w = int(round(width_cm))
     h = int(round(height_cm))
 
-    # 1. Жёсткая база точных стандартов Reefland (Д, Ш, В)
+    # 1. Жесткая база точных стандартов Reefland (Д, Ш, В)
     EXACT_STANDARDS = {
-        # Кубы
+        # Кубическая линейка
         (30, 30, 30): 6, 
         (40, 40, 40): 6, 
         (45, 45, 45): 8, 
-        (50, 50, 50): 10,
+        (50, 50, 50): 8,   # Зафиксировано: Куб 50х50х50 -> 8 мм
         (60, 60, 60): 10,  # Зафиксировано: Куб 60х60х60 -> 10 мм
-        (70, 70, 70): 15,
+        (70, 70, 70): 12,
         
         # Прямоугольные стандарты
         (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
@@ -170,15 +170,15 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             else: rec_mm = 12
 
         elif height_cm <= 52:
-            if max_side <= 60: rec_mm = 8
+            if max_side <= 55: rec_mm = 8       # До 55 см длины/ширины при высоте до 52 см -> 8 мм
             elif max_side <= 100: rec_mm = 10
             elif max_side <= 140: rec_mm = 12
             else: rec_mm = 15
 
         elif height_cm <= 62:
-            if max_side <= 65: rec_mm = 10     # Кубообразные до 65 см ширины/длины
-            elif max_side <= 130: rec_mm = 12  # Для 70х60х60, 90х60х60, 120х50х60
-            else: rec_mm = 15                  # Для 120х60х60, 150х60х60 и длинее
+            if max_side <= 65: rec_mm = 10     # Кубообразные до 65 см -> 10 мм
+            elif max_side <= 130: rec_mm = 12  # Для 70х60х60, 90х60х60, 120х50х60 -> 12 мм
+            else: rec_mm = 15                  # Для 120х60х60, 150х60х60 -> 15 мм
 
         elif height_cm <= 72:
             if max_side <= 130: rec_mm = 15
