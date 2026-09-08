@@ -89,15 +89,15 @@ def get_result_keyboard(length, width, height, rec):
     # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Текст для шеринга
+    # Текст для шеринга без лишних элементов
     share_text = quote(
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
         f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
     )
 
-    # Точка в url убирает синюю ссылку сверху в десктоп-версии и мобильных приложениях
-    share_url = f"https://t.me/share/url?url=.&text={share_text}"
+    # Передаем только text, чтобы сообщение начиналось прямо с эмодзи
+    share_url = f"https://t.me/share/url?text={share_text}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
