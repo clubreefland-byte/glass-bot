@@ -119,7 +119,7 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- ЖЁСТКАЯ ТАБЛИЦА СТАНДАРТОВ REEFLAND + ФИЗИЧЕСКИЙ РАСЧЕТ ---
+# --- ТОЧНАЯ СЕТКА СТАНДАРТОВ МАСТЕРСКОЙ REEFLAND ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
@@ -128,28 +128,25 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     w = int(round(width_cm))
     h = int(round(height_cm))
 
-    # 1. Точная матрица ходовых размеров мастерской Reefland (Д, Ш, В)
+    # 1. Жёсткая база точных стандартов Reefland (Д, Ш, В)
     EXACT_STANDARDS = {
-        # 6 мм
-        (30, 30, 30): 6, (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6,
+        # Кубы
+        (30, 30, 30): 6, 
+        (40, 40, 40): 6, 
+        (45, 45, 45): 8, 
+        (50, 50, 50): 10,
+        (60, 60, 60): 10,  # Зафиксировано: Куб 60х60х60 -> 10 мм
+        (70, 70, 70): 15,
         
-        # 8 мм
-        (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8,
-        
-        # 10 мм
-        (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10,
-        
-        # 12 мм
+        # Прямоугольные стандарты
+        (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
+        (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
+        (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
         (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
-        
-        # 15 мм
         (120, 60, 60): 15, (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
-        
-        # 19 мм
         (180, 60, 60): 19, (200, 60, 60): 19, (200, 70, 70): 19
     }
 
-    # Поиск по точному совпадению (с учетом порядка ввода длины и ширины)
     key_direct = (l, w, h)
     key_swapped = (w, l, h)
 
@@ -158,25 +155,36 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif key_swapped in EXACT_STANDARDS:
         rec_mm = EXACT_STANDARDS[key_swapped]
     else:
-        # 2. Физический расчет по формуле прогиба (DIN 32622) для произвольных размеров
-        max_l = max(length_cm, width_cm)
-        alpha = max_l / height_cm if height_cm > 0 else 1.0
-        
-        if alpha < 0.5: beta = 0.003
-        elif alpha < 1.0: beta = 0.015
-        elif alpha < 1.5: beta = 0.025
-        elif alpha < 2.0: beta = 0.035
-        elif alpha < 2.5: beta = 0.045
-        else: beta = 0.050
+        # 2. Правила расчёта для произвольных/нестандартных размеров
+        max_side = max(length_cm, width_cm)
 
-        calculated_mm = (height_cm ** 1.5) * (beta ** 0.5) * 1.8
+        if height_cm <= 35:
+            if max_side <= 60: rec_mm = 6
+            elif max_side <= 100: rec_mm = 8
+            else: rec_mm = 10
 
-        if calculated_mm <= 6.2: rec_mm = 6
-        elif calculated_mm <= 8.3: rec_mm = 8
-        elif calculated_mm <= 10.4: rec_mm = 10
-        elif calculated_mm <= 12.5: rec_mm = 12
-        elif calculated_mm <= 15.5: rec_mm = 15
-        else: rec_mm = 19
+        elif height_cm <= 45:
+            if max_side <= 60: rec_mm = 6
+            elif max_side <= 90: rec_mm = 8
+            elif max_side <= 120: rec_mm = 10
+            else: rec_mm = 12
+
+        elif height_cm <= 52:
+            if max_side <= 60: rec_mm = 8
+            elif max_side <= 100: rec_mm = 10
+            elif max_side <= 140: rec_mm = 12
+            else: rec_mm = 15
+
+        elif height_cm <= 62:
+            if max_side <= 65: rec_mm = 10     # Кубообразные до 65 см ширины/длины
+            elif max_side <= 130: rec_mm = 12  # Для 70х60х60, 90х60х60, 120х50х60
+            else: rec_mm = 15                  # Для 120х60х60, 150х60х60 и длинее
+
+        elif height_cm <= 72:
+            if max_side <= 130: rec_mm = 15
+            else: rec_mm = 19
+        else:
+            rec_mm = 19
 
     # Рёбра и стяжки
     max_side = max(length_cm, width_cm)
