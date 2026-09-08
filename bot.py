@@ -10,10 +10,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
@@ -86,10 +84,7 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     
-    # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
-
-    # Параметр для inline-шеринга без лишних URL
     inline_share_query = f"{l_int}_{w_int}_{h_int}_{r_int}"
 
     return InlineKeyboardMarkup(
@@ -116,7 +111,7 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- ОБРАБОТЧИК ИНЛАЙН-ШЕРИНГА БЕЗ ССЫЛОК ВВЕРХУ ---
+# --- ОБРАБОТЧИК ИНЛАЙН-ЗАПРОСА ---
 @dp.inline_query()
 async def process_inline_share(inline_query: types.InlineQuery):
     query_str = inline_query.query.strip()
@@ -129,7 +124,6 @@ async def process_inline_share(inline_query: types.InlineQuery):
         if len(parts) == 4:
             l_int, w_int, h_int, r_int = parts
             
-            # Чистый текст сообщения
             share_text = (
                 f"📐 **Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!**\n"
                 f"Рекомендуемая толщина: **{r_int} мм** (Optiwhite / М1).\n\n"
@@ -137,16 +131,16 @@ async def process_inline_share(inline_query: types.InlineQuery):
             )
 
             result = InlineQueryResultArticle(
-                id="share_calc",
+                id=f"share_{query_str}",
                 title=f"Отправить результат: {l_int}×{w_int}×{h_int} см ({r_int} мм)",
-                description="Чистый расчет без лишних ссылок вверху",
+                description="Нажмите, чтобы отправить карточку без лишних ссылок",
                 input_message_content=InputTextMessageContent(
                     message_text=share_text,
                     parse_mode="Markdown"
                 )
             )
 
-            await bot.answer_inline_query(inline_query.id, results=[result], cache_time=1)
+            await inline_query.answer(results=[result], cache_time=1)
     except Exception as e:
         logging.error(f"Ошибка при обработке inline query: {e}")
 
