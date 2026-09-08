@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+from datetime import datetime
 from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -29,9 +30,12 @@ dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
 
+# Оперативная статистика в памяти
 bot_stats = {
     "users": {},
-    "total_calculations": 0
+    "total_calculations": 0,
+    "lead_clicks": 0,
+    "popular_sizes": {}
 }
 
 
@@ -95,12 +99,14 @@ def get_result_keyboard(length, width, height, rec):
 
     share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
 
+    callback_payload = f"lead_{l_int}_{w_int}_{h_int}_{r_int}"
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
-                    url=f"https://t.me/Asteriy78{calc_data}"
+                    callback_data=callback_payload
                 )
             ],
             [
@@ -128,7 +134,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     w = int(round(width_cm))
     h = int(round(height_cm))
 
-    # 1. Жесткая база точных стандартов Reefland (Д, Ш, В)
     EXACT_STANDARDS = {
         # Кубическая линейка
         (30, 30, 30): 6, 
@@ -158,7 +163,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif key_swapped in EXACT_STANDARDS:
         rec_mm = EXACT_STANDARDS[key_swapped]
     else:
-        # 2. Правила расчёта для произвольных/нестандартных размеров
         max_side = max(length_cm, width_cm)
 
         if height_cm <= 35:
@@ -189,11 +193,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         else:
             rec_mm = 19
 
-    # Определение требований к рёбрам и стяжкам
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
 
-    # Открытый аквариум из 15 мм допустим строго ДО 150 см длины при высоте <= 52 см
     if rec_mm == 15 and height_cm <= 52 and max_side <= 150:
         bracing_text = "Не требуются"
     elif max_side >= 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
@@ -213,12 +215,16 @@ def register_user(user: types.User):
         bot_stats["users"][user_id] = {
             "name": full_name,
             "username": username,
-            "calculations": 0
+            "calculations": 0,
+            "last_seen": datetime.now().strftime("%d.%m.%Y")
         }
     else:
         bot_stats["users"][user_id]["name"] = full_name
         bot_stats["users"][user_id]["username"] = username
+        bot_stats["users"][user_id]["last_seen"] = datetime.now().strftime("%d.%m.%Y")
 
+
+# --- ХЭНДЛЕРЫ КОМАНД И СООБЩЕНИЙ ---
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -251,27 +257,40 @@ async def cmd_stats(message: types.Message):
 
     total_users = len(bot_stats["users"])
     total_calcs = bot_stats["total_calculations"]
+    lead_clicks = bot_stats.get("lead_clicks", 0)
+
+    # Топ-10 популярных размеров
+    pop_sizes = sorted(bot_stats.get("popular_sizes", {}).items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    if pop_sizes:
+        pop_sizes_text = "\n".join([f"  {i+1}. **{size}** — {cnt} раз(а)" for i, (size, cnt) in enumerate(pop_sizes)])
+    else:
+        pop_sizes_text = "  _нет данных_"
+
+    conversion = round((lead_clicks / total_calcs * 100), 1) if total_calcs > 0 else 0
 
     stats_text = (
-        "📈 **Статистика использования бота:**\n\n"
-        f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Всего расчетов: **{total_calcs}**\n\n"
-        "👤 **Список пользователей:**\n"
+        "📈 **Статистика калькулятора Reefland:**\n\n"
+        f"👥 Пользователей: **{total_users}**\n"
+        f"📐 Всего расчетов: **{total_calcs}**\n"
+        f"📩 Кликов «Узнать стоимость»: **{lead_clicks}** (Конверсия: **{conversion}%**)\n\n"
+        f"🔥 **Топ-10 запрашиваемых размеров:**\n{pop_sizes_text}\n\n"
+        "👤 **Активность пользователей:**\n"
     )
 
     if not bot_stats["users"]:
         stats_text += "_Пока никто не пользовался ботом._"
     else:
         user_lines = []
-        for uid, data in list(bot_stats["users"].items())[-20:]:
+        sorted_users = sorted(bot_stats["users"].values(), key=lambda x: x.get("calculations", 0), reverse=True)[:15]
+        for data in sorted_users:
             name = data["name"]
             username = data["username"]
             calcs = data["calculations"]
-            user_lines.append(f"• {name} ({username}) — расчетов: {calcs}")
+            last_seen = data.get("last_seen", "—")
+            user_lines.append(f"• {name} ({username}) — **{calcs}** расч. (был: {last_seen})")
         
         stats_text += "\n".join(user_lines)
-        if total_users > 20:
-            stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
 
     await message.answer(stats_text, parse_mode="Markdown")
 
@@ -293,6 +312,32 @@ async def process_check_sub(callback: types.CallbackQuery):
         )
     else:
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+
+
+@dp.callback_query(lambda c: c.data.startswith("lead_"))
+async def process_lead_click(callback: types.CallbackQuery):
+    user = callback.from_user
+    register_user(user)
+
+    parts = callback.data.split("_")
+    if len(parts) == 5:
+        l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+
+        # Фиксируем клик в локальной статистике
+        bot_stats["lead_clicks"] = bot_stats.get("lead_clicks", 0) + 1
+
+        calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l}х{w}х{h}см%20из%20стекла%20{rec}мм."
+        target_url = f"https://t.me/Asteriy78{calc_data}"
+
+        await callback.answer()
+        await callback.message.answer(
+            f"👍 **Заявка зафиксирована!**\n\n"
+            f"Для согласования деталей и расчета стоимости нажмите на кнопку ниже:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="💬 Написать мастеру в Telegram", url=target_url)]]
+            ),
+            parse_mode="Markdown"
+        )
 
 
 @dp.message()
@@ -336,10 +381,14 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
+        exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
+
+        # Обновляем локальную статистику
         bot_stats["total_calculations"] += 1
         bot_stats["users"][user_id]["calculations"] += 1
-
-        exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
+        
+        size_key = f"{int(round(length))}×{int(round(width))}×{int(round(height))}"
+        bot_stats["popular_sizes"][size_key] = bot_stats["popular_sizes"].get(size_key, 0) + 1
 
         volume_l = int((length * width * height) / 1000)
         
@@ -375,6 +424,8 @@ async def process_calc(message: types.Message):
         logging.error(f"Непредвиденная ошибка при расчете для юзера {user_id}: {e}")
         await message.answer("❌ Произошла ошибка при вычислении. Проверьте правильность введенных чисел.")
 
+
+# --- ИНИЦИАЛИЗАЦИЯ И ЗАПУСК СЕРВЕРА ---
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
