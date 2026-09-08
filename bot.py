@@ -317,12 +317,15 @@ async def process_check_sub(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("ld_"))
 async def process_lead_click(callback: types.CallbackQuery):
-    user = callback.from_user
-    register_user(user)
+    try:
+        user = callback.from_user
+        register_user(user)
 
-    parts = callback.data.split("_")
-    if len(parts) == 5:
-        l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+        parts = callback.data.split("_")
+        if len(parts) >= 5:
+            l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+        else:
+            l, w, h, rec = "150", "60", "60", "15"
 
         bot_stats["lead_clicks"] = bot_stats.get("lead_clicks", 0) + 1
 
@@ -338,16 +341,22 @@ async def process_lead_click(callback: types.CallbackQuery):
             ),
             parse_mode="Markdown"
         )
+    except Exception as e:
+        logging.error(f"Ошибка в process_lead_click: {e}")
+        await callback.answer("⚠️ Произошла ошибка. Попробуйте еще раз.", show_alert=True)
 
 
 @dp.callback_query(F.data.startswith("sh_"))
 async def process_share_click(callback: types.CallbackQuery):
-    user = callback.from_user
-    register_user(user)
+    try:
+        user = callback.from_user
+        register_user(user)
 
-    parts = callback.data.split("_")
-    if len(parts) == 5:
-        l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+        parts = callback.data.split("_")
+        if len(parts) >= 5:
+            l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+        else:
+            l, w, h, rec = "150", "60", "60", "15"
 
         bot_stats["share_clicks"] = bot_stats.get("share_clicks", 0) + 1
 
@@ -365,6 +374,9 @@ async def process_share_click(callback: types.CallbackQuery):
             ),
             parse_mode="Markdown"
         )
+    except Exception as e:
+        logging.error(f"Ошибка в process_share_click: {e}")
+        await callback.answer("⚠️ Произошла ошибка. Попробуйте еще раз.", show_alert=True)
 
 
 @dp.message()
