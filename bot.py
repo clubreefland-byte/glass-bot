@@ -89,13 +89,14 @@ def get_result_keyboard(length, width, height, rec):
     # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Чистый текст для шеринга без громоздкой ссылки
+    # Чистый текст без первой ссылки вверху
     share_text = (
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
-        f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
+        f"👉 Рассчитай свой аквариум в калькуляторе:\n@AquaGlassCalcBot"
     )
-    share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={quote(share_text)}"
+    # Параметр url пустой, чтобы Telegram не вставлял URL на первой строчке
+    share_url = f"https://t.me/share/url?url=&text={quote(share_text)}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -183,19 +184,19 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     # Экспертные пороги для бескаркасных систем (Rimless) по стандарту мастерской
     if (length_cm >= 150 and height_cm >= 60) or (length_cm >= 120 and width_cm >= 60 and height_cm >= 60) or height_cm >= 75:
         if recommended_size < 15:
-            recommended_size = 15  # 120х60х60, 150х60х60 и крупнее -> 15 мм
+            recommended_size = 15
     elif (length_cm >= 70 and height_cm >= 60) or (length_cm >= 100 and height_cm >= 50) or (length_cm >= 120 and height_cm >= 45) or height_cm > 60:
         if recommended_size < 12:
-            recommended_size = 12  # 70х60х60, 120х50х60, длинные аквариумы от h=50 см или height > 60 см -> 12 мм
+            recommended_size = 12
     elif (length_cm >= 60 and height_cm >= 50) or (width_cm >= 60 and height_cm >= 50) or (length_cm >= 70 and height_cm >= 45):
         if recommended_size < 10:
-            recommended_size = 10  # Куб 60х60х60, 70х50х50, 80х50х50, 90х50х50 -> 10 мм
+            recommended_size = 10
     elif (length_cm >= 50 and height_cm >= 40) or (length_cm >= 60 and height_cm >= 40) or (length_cm >= 80 and height_cm >= 40) or height_cm > 45:
         if recommended_size < 8:
-            recommended_size = 8   # Куб 50х50х50, 60х40х40, 80х40х40 -> 8 мм
+            recommended_size = 8
     elif (length_cm >= 30 or height_cm >= 30):
         if recommended_size < 6:
-            recommended_size = 6   # Кубы 30х30х30, 40х40х40, 45х45х45 -> 6 мм
+            recommended_size = 6
 
     bracing_text = "Не требуются"
     if length_cm >= 140 and recommended_size < 15:
@@ -344,13 +345,12 @@ async def process_calc(message: types.Message):
 
         volume_l = int((length * width * height) / 1000)
         
-        # Точный расчет площади в м² (дно + 2 продольных + 2 торцевых)
+        # Точный расчет площади в м²
         l_m = length / 100.0
         w_m = width / 100.0
         h_m = height / 100.0
         area_m2 = (l_m * w_m) + (2 * l_m * h_m) + (2 * w_m * h_m)
         
-        # 1 кв.м стекла толщиной 1 мм весит 2.5 кг
         glass_weight_kg = round(area_m2 * rec * 2.5, 1)
         total_weight_kg = int(glass_weight_kg + volume_l)
 
