@@ -134,9 +134,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (30, 30, 30): 6, 
         (40, 40, 40): 6, 
         (45, 45, 45): 8, 
-        (50, 50, 50): 8,   # Зафиксировано: Куб 50х50х50 -> 8 мм
-        (60, 60, 60): 10,  # Зафиксировано: Куб 60х60х60 -> 10 мм
+        (50, 50, 50): 8,   
+        (60, 60, 60): 10,  
         (70, 70, 70): 12,
+        (80, 80, 80): 15,  # Стяжки + рёбра
         
         # Прямоугольные стандарты
         (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
@@ -144,7 +145,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
         (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
         (120, 60, 60): 15, (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
-        (180, 60, 60): 19, (200, 60, 60): 19, (200, 70, 70): 19
+        (180, 60, 60): 15, (180, 70, 70): 15, (200, 60, 60): 15, (200, 70, 70): 15
     }
 
     key_direct = (l, w, h)
@@ -170,26 +171,30 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
             else: rec_mm = 12
 
         elif height_cm <= 52:
-            if max_side <= 55: rec_mm = 8       # До 55 см длины/ширины при высоте до 52 см -> 8 мм
+            if max_side <= 55: rec_mm = 8       
             elif max_side <= 100: rec_mm = 10
             elif max_side <= 140: rec_mm = 12
             else: rec_mm = 15
 
         elif height_cm <= 62:
-            if max_side <= 65: rec_mm = 10     # Кубообразные до 65 см -> 10 мм
-            elif max_side <= 130: rec_mm = 12  # Для 70х60х60, 90х60х60, 120х50х60 -> 12 мм
-            else: rec_mm = 15                  # Для 120х60х60, 150х60х60 -> 15 мм
+            if max_side <= 65: rec_mm = 10     
+            elif max_side <= 130: rec_mm = 12  
+            else: rec_mm = 15                  
 
         elif height_cm <= 72:
             if max_side <= 130: rec_mm = 15
-            else: rec_mm = 19
+            else: rec_mm = 15  # До 72 см высоты делаем 15 мм (со стяжками/рёбрами)
         else:
+            # Только от 75-80 см высоты переходим на 19 мм как критическое условие
             rec_mm = 19
 
-    # Рёбра и стяжки
+    # Определение требований к рёбрам и стяжкам
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
-    if max_side >= 160 and rec_mm < 15:
+
+    if rec_mm == 15 and (max_side >= 150 or height_cm >= 65):
+        bracing_text = "Требуются рёбра жесткости и стяжки"
+    elif max_side >= 130 or height_cm >= 60:
         bracing_text = "Рекомендуются рёбра жесткости"
     elif max_side >= 180:
         bracing_text = "Требуются рёбра жесткости и стяжки"
@@ -229,7 +234,7 @@ async def cmd_start(message: types.Message):
 
     await message.answer(
         "🛠 **Аквариумная мастерская Reefland**\n\n"
-        "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
+        "Точный расчет толщины стекла для аквариумов (Optiwhite / М1).\n\n"
         "Отправьте размеры: Длина Ширина Высота (см).\n"
         "Пример: `150х60х60` или `150 60 60`",
         parse_mode="Markdown",
@@ -278,7 +283,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.message.edit_text(
             "🛠 **Аквариумная мастерская Reefland**\n\n"
             "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
-            "Точный расчет толщины стекла бескаркасных аквариумов без стяжек и ребер (Optiwhite / М1).\n\n"
+            "Точный расчет толщины стекла для аквариумов (Optiwhite / М1).\n\n"
             "Отправьте размеры: Длина Ширина Высота (см).\n"
             "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown",
@@ -354,7 +359,7 @@ async def process_calc(message: types.Message):
             f"⚖️ **Вес конструкции:**\n"
             f"• Сухой вес стекла: **~{glass_weight_kg} кг**\n"
             f"• Вес с водой: **~{total_weight_kg} кг** *(без учета декора)*\n\n"
-            f"💡 *Расчет выполнен для бескаркасных открытых аквариумов.*"
+            f"💡 *Расчет выполнен с учетом стандартов надежности мастерской Reefland.*"
         )
         await message.answer(
             res_text, 
