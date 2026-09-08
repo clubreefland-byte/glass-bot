@@ -89,14 +89,16 @@ def get_result_keyboard(length, width, height, rec):
     # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    # Чистый текст без первой ссылки вверху
+    # Текст для отправки друзьям / в чаты
     share_text = (
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
-        f"👉 Рассчитай свой аквариум в калькуляторе:\n@AquaGlassCalcBot"
+        f"👉 Рассчитай свой аквариум в калькуляторе: @AquaGlassCalcBot"
     )
-    # Параметр url пустой, чтобы Telegram не вставлял URL на первой строчке
-    share_url = f"https://t.me/share/url?url=&text={quote(share_text)}"
+    
+    # Ссылка на бота в url и текст в text обеспечивают стабильную работу кнопки на ПК и телефонах
+    bot_link = "https://t.me/AquaGlassCalcBot"
+    share_url = f"https://t.me/share/url?url={quote(bot_link)}&text={quote(share_text)}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
