@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -84,7 +85,17 @@ def get_start_keyboard():
 
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
+    
+    # Текст сообщения мастеру
     calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
+
+    # Текст для шеринга с друзьями / в чатах
+    share_text = (
+        f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
+        f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1).\n\n"
+        f"Рассчитай свой аквариум в калькуляторе:"
+    )
+    share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={quote(share_text)}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -92,6 +103,12 @@ def get_result_keyboard(length, width, height, rec):
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
                     url=f"https://t.me/Asteriy78{calc_data}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📤 Поделиться результатом", 
+                    url=share_url
                 )
             ],
             [
