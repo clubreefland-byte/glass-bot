@@ -35,6 +35,7 @@ bot_stats = {
     "users": {},
     "total_calculations": 0,
     "lead_clicks": 0,
+    "share_clicks": 0,
     "popular_sizes": {}
 }
 
@@ -89,30 +90,22 @@ def get_start_keyboard():
 
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-    
-    calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l_int}х{w_int}х{h_int}см%20из%20стекла%20{r_int}мм."
 
-    share_text = quote(
-        f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
-        f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1)."
-    )
-
-    share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
-
-    callback_payload = f"lead_{l_int}_{w_int}_{h_int}_{r_int}"
+    lead_payload = f"lead_{l_int}_{w_int}_{h_int}_{r_int}"
+    share_payload = f"share_{l_int}_{w_int}_{h_int}_{r_int}"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
-                    callback_data=callback_payload
+                    callback_data=lead_payload
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="📤 Поделиться результатом", 
-                    url=share_url
+                    callback_data=share_payload
                 )
             ],
             [
@@ -258,6 +251,7 @@ async def cmd_stats(message: types.Message):
     total_users = len(bot_stats["users"])
     total_calcs = bot_stats["total_calculations"]
     lead_clicks = bot_stats.get("lead_clicks", 0)
+    share_clicks = bot_stats.get("share_clicks", 0)
 
     # Топ-10 популярных размеров
     pop_sizes = sorted(bot_stats.get("popular_sizes", {}).items(), key=lambda x: x[1], reverse=True)[:10]
@@ -273,7 +267,8 @@ async def cmd_stats(message: types.Message):
         "📈 **Статистика калькулятора Reefland:**\n\n"
         f"👥 Пользователей: **{total_users}**\n"
         f"📐 Всего расчетов: **{total_calcs}**\n"
-        f"📩 Кликов «Узнать стоимость»: **{lead_clicks}** (Конверсия: **{conversion}%**)\n\n"
+        f"📩 Кликов «Узнать стоимость»: **{lead_clicks}** (Конверсия: **{conversion}%**)\n"
+        f"📤 Кликов «Поделиться»: **{share_clicks}**\n\n"
         f"🔥 **Топ-10 запрашиваемых размеров:**\n{pop_sizes_text}\n\n"
         "👤 **Активность пользователей:**\n"
     )
@@ -323,7 +318,6 @@ async def process_lead_click(callback: types.CallbackQuery):
     if len(parts) == 5:
         l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
 
-        # Фиксируем клик в локальной статистике
         bot_stats["lead_clicks"] = bot_stats.get("lead_clicks", 0) + 1
 
         calc_data = f"?text=Здравствуйте!%20Интересует%20стоимость%20изготовления%20аквариума%20{l}х{w}х{h}см%20из%20стекла%20{rec}мм."
@@ -335,6 +329,34 @@ async def process_lead_click(callback: types.CallbackQuery):
             f"Для согласования деталей и расчета стоимости нажмите на кнопку ниже:",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text="💬 Написать мастеру в Telegram", url=target_url)]]
+            ),
+            parse_mode="Markdown"
+        )
+
+
+@dp.callback_query(lambda c: c.data.startswith("share_"))
+async def process_share_click(callback: types.CallbackQuery):
+    user = callback.from_user
+    register_user(user)
+
+    parts = callback.data.split("_")
+    if len(parts) == 5:
+        l, w, h, rec = parts[1], parts[2], parts[3], parts[4]
+
+        # Фиксируем шеринг
+        bot_stats["share_clicks"] = bot_stats.get("share_clicks", 0) + 1
+
+        share_text = quote(
+            f"📐 Я рассчитал толщину стекла для аквариума {l}×{w}×{h} см!\n"
+            f"Рекомендуемая толщина: {rec} мм (Optiwhite / М1)."
+        )
+        share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
+
+        await callback.answer()
+        await callback.message.answer(
+            "📤 **Нажмите кнопку ниже, чтобы переслать результат в чат или другу:**",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="📲 Отправить в Telegram", url=share_url)]]
             ),
             parse_mode="Markdown"
         )
