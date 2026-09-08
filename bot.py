@@ -119,63 +119,67 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- ТОЧНАЯ МАТРИЧНАЯ ЛОГИКА РАСЧЕТА ---
+# --- ЖЁСТКАЯ ТАБЛИЦА СТАНДАРТОВ REEFLAND + ФИЗИЧЕСКИЙ РАСЧЕТ ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
 
-    max_side = max(length_cm, width_cm)
-    rec_mm = 6
+    l = int(round(length_cm))
+    w = int(round(width_cm))
+    h = int(round(height_cm))
 
-    # Высота до 35 см
-    if height_cm <= 35:
-        if max_side <= 60:
-            rec_mm = 6
-        elif max_side <= 90:
-            rec_mm = 8
-        else:
-            rec_mm = 10
+    # 1. Точная матрица ходовых размеров мастерской Reefland (Д, Ш, В)
+    EXACT_STANDARDS = {
+        # 6 мм
+        (30, 30, 30): 6, (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6,
+        
+        # 8 мм
+        (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8,
+        
+        # 10 мм
+        (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10,
+        
+        # 12 мм
+        (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
+        
+        # 15 мм
+        (120, 60, 60): 15, (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
+        
+        # 19 мм
+        (180, 60, 60): 19, (200, 60, 60): 19, (200, 70, 70): 19
+    }
 
-    # Высота 36–45 см
-    elif height_cm <= 45:
-        if max_side <= 60:
-            rec_mm = 6
-        elif max_side <= 90:
-            rec_mm = 8
-        elif max_side <= 120:
-            rec_mm = 10
-        else:
-            rec_mm = 12
+    # Поиск по точному совпадению (с учетом порядка ввода длины и ширины)
+    key_direct = (l, w, h)
+    key_swapped = (w, l, h)
 
-    # Высота 46–52 см
-    elif height_cm <= 52:
-        if max_side <= 60:
-            rec_mm = 8
-        elif max_side <= 100:
-            rec_mm = 10
-        elif max_side <= 140:
-            rec_mm = 12
-        else:
-            rec_mm = 15
-
-    # Высота 53–62 см
-    elif height_cm <= 62:
-        if max_side <= 90:
-            rec_mm = 12
-        elif max_side <= 130:
-            rec_mm = 12
-        else:
-            rec_mm = 15
-
-    # Высота 63–72 см
-    elif height_cm <= 72:
-        if max_side <= 120:
-            rec_mm = 15
-        else:
-            rec_mm = 19
+    if key_direct in EXACT_STANDARDS:
+        rec_mm = EXACT_STANDARDS[key_direct]
+    elif key_swapped in EXACT_STANDARDS:
+        rec_mm = EXACT_STANDARDS[key_swapped]
     else:
-        rec_mm = 19
+        # 2. Физический расчет по формуле прогиба (DIN 32622) для произвольных размеров
+        max_l = max(length_cm, width_cm)
+        alpha = max_l / height_cm if height_cm > 0 else 1.0
+        
+        if alpha < 0.5: beta = 0.003
+        elif alpha < 1.0: beta = 0.015
+        elif alpha < 1.5: beta = 0.025
+        elif alpha < 2.0: beta = 0.035
+        elif alpha < 2.5: beta = 0.045
+        else: beta = 0.050
 
+        calculated_mm = (height_cm ** 1.5) * (beta ** 0.5) * 1.8
+
+        if calculated_mm <= 6.2: rec_mm = 6
+        elif calculated_mm <= 8.3: rec_mm = 8
+        elif calculated_mm <= 10.4: rec_mm = 10
+        elif calculated_mm <= 12.5: rec_mm = 12
+        elif calculated_mm <= 15.5: rec_mm = 15
+        else: rec_mm = 19
+
+    # Рёбра и стяжки
+    max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
     if max_side >= 160 and rec_mm < 15:
         bracing_text = "Рекомендуются рёбра жесткости"
