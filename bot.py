@@ -3,7 +3,7 @@ import os
 import logging
 from datetime import datetime
 from urllib.parse import quote
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -89,7 +89,6 @@ def get_start_keyboard():
 
 
 def get_result_keyboard(length, width, height, rec):
-    # Приводим к целочисленным сантиметрам для строгого соблюдения лимита Telegram (до 64 байт)
     l_val = length / 10.0 if length > 300 else length
     w_val = width / 10.0 if width > 300 else width
     h_val = height / 10.0 if height > 300 else height
@@ -297,7 +296,7 @@ async def cmd_stats(message: types.Message):
     await message.answer(stats_text, parse_mode="Markdown")
 
 
-@dp.callback_query(lambda c: c.data == "check_sub")
+@dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     register_user(callback.from_user)
@@ -316,7 +315,7 @@ async def process_check_sub(callback: types.CallbackQuery):
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
 
 
-@dp.callback_query(lambda c: c.data.startswith("ld_"))
+@dp.callback_query(F.data.startswith("ld_"))
 async def process_lead_click(callback: types.CallbackQuery):
     user = callback.from_user
     register_user(user)
@@ -341,7 +340,7 @@ async def process_lead_click(callback: types.CallbackQuery):
         )
 
 
-@dp.callback_query(lambda c: c.data.startswith("sh_"))
+@dp.callback_query(F.data.startswith("sh_"))
 async def process_share_click(callback: types.CallbackQuery):
     user = callback.from_user
     register_user(user)
@@ -399,7 +398,6 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Приводим к см, если пользователь ввел в миллиметрах (>300)
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
