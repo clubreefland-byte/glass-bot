@@ -19,7 +19,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 ADMIN_ID = 1318763491
 
-# Фиксированный путь вебхука предотвращает проблемы с двоеточием в токене
+# Фиксированный путь вебхука
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
 
@@ -145,7 +145,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
         (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
-        (120, 60, 60): 15, (150, 60, 50): 15,
+        (120, 60, 60): 15, (150, 60, 50): 15, (160, 50, 50): 15,
         (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
         (170, 60, 50): 15, (170, 60, 60): 15, (180, 60, 50): 15,
         (180, 60, 60): 15, (180, 70, 70): 15, (200, 60, 60): 15, (200, 70, 70): 15
@@ -194,10 +194,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
 
-    # Открытый аквариум из 15 мм допустим строго ДО 150 см длины при высоте <= 52 см
-    if rec_mm == 15 and height_cm <= 52 and max_side <= 150:
+    # Открытый аквариум из 15 мм допустим до 160 см длины при высоте <= 52 см
+    if rec_mm == 15 and height_cm <= 52 and max_side <= 160:
         bracing_text = "Не требуются"
-    elif max_side >= 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
+    elif max_side > 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
         bracing_text = "Требуются рёбра жесткости и стяжки"
     elif max_side >= 130 or (height_cm >= 65 and rec_mm < 15):
         bracing_text = "Рекомендуются рёбра жесткости"
@@ -379,7 +379,6 @@ async def process_calc(message: types.Message):
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
-        # Автоматический сброс старых зависших обновлений и установка нового вебхука
         await bot.delete_webhook(drop_pending_updates=True)
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
         logging.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
