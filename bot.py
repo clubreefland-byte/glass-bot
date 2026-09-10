@@ -31,18 +31,29 @@ dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
 
-# --- ИНИЦИАЛИЗАЦИЯ SQLITE (БЕСПЛАТНО, ВСТРОЕНО В PYTHON) ---
+# --- ИНИЦИАЛИЗАЦИЯ И РАБОТА С SQLITE ---
 DB_PATH = "stats.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Таблица пользователей
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             name TEXT,
             username TEXT,
-            calculations INTEGER DEFAULT 0
+            calculations INTEGER DEFAULT 0,
+            lead_clicks INTEGER DEFAULT 0
+        )
+    """)
+    # Таблица истории расчетов для аналитики объемов
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calculations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            volume_l INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -57,8 +68,8 @@ def db_register_user(user: types.User):
     username = f"@{user.username}" if user.username else "нет username"
     
     cursor.execute("""
-        INSERT INTO users (user_id, name, username, calculations)
-        VALUES (?, ?, ?, 0)
+        INSERT INTO users (user_id, name, username, calculations, lead_clicks)
+        VALUES (?, ?, ?, 0, 0)
         ON CONFLICT(user_id) DO UPDATE SET
             name=excluded.name,
             username=excluded.username
@@ -66,26 +77,55 @@ def db_register_user(user: types.User):
     conn.commit()
     conn.close()
 
-def db_increment_calc(user: types.User):
+def db_increment_calc(user: types.User, volume_l: int):
     db_register_user(user)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET calculations = calculations + 1 WHERE user_id = ?", (user.id,))
+    cursor.execute("INSERT INTO calculations (user_id, volume_l) VALUES (?, ?)", (user.id, volume_l))
+    conn.commit()
+    conn.close()
+
+def db_increment_lead_click(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET lead_clicks = lead_clicks + 1 WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 
 def db_get_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*), SUM(calculations) FROM users")
-    total_users, total_calcs = cursor.fetchone()
-    total_users = total_users or 0
-    total_calcs = total_calcs or 0
+    
+    # Общая статистика
+    cursor.execute("SELECT COUNT(*), SUM(calculations), SUM(lead_clicks) FROM users")
+    res = cursor.fetchone()
+    total_users = res[0] or 0
+    total_calcs = res[1] or 0
+    total_clicks = res[2] or 0
 
-    cursor.execute("SELECT name, username, calculations FROM users ORDER BY calculations DESC LIMIT 20")
+    # Объемная аналитика
+    cursor.execute("SELECT volume_l FROM calculations")
+    volumes = [r[0] for r in cursor.fetchall()]
+
+    v_under_50 = sum(1 for v in volumes if v < 50)
+    v_50_150 = sum(1 for v in volumes if 50 <= v < 150)
+    v_150_300 = sum(1 for v in volumes if 150 <= v < 300)
+    v_over_300 = sum(1 for v in volumes if v >= 300)
+
+    # Топ пользователей
+    cursor.execute("SELECT name, username, calculations, lead_clicks FROM users ORDER BY calculations DESC LIMIT 20")
     top_users = cursor.fetchall()
     conn.close()
-    return total_users, total_calcs, top_users
+
+    volume_stats = {
+        "under_50": (v_under_50, round((v_under_50 / total_calcs * 100), 1) if total_calcs else 0),
+        "50_150": (v_50_150, round((v_50_150 / total_calcs * 100), 1) if total_calcs else 0),
+        "150_300": (v_150_300, round((v_150_300 / total_calcs * 100), 1) if total_calcs else 0),
+        "over_300": (v_over_300, round((v_over_300 / total_calcs * 100), 1) if total_calcs else 0)
+    }
+
+    return total_users, total_calcs, total_clicks, volume_stats, top_users
 
 
 async def check_user_subscription(user_id: int) -> bool:
@@ -139,7 +179,7 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     
-    calc_data = f"?text=Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
+    calc_data_raw = f"{l_int}_{w_int}_{h_int}_{r_int}"
 
     share_text = quote(
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
@@ -153,7 +193,7 @@ def get_result_keyboard(length, width, height, rec):
             [
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
-                    url=f"https://t.me/Asteriy78{calc_data}"
+                    callback_data=f"lead_{calc_data_raw}"
                 )
             ],
             [
@@ -282,24 +322,49 @@ async def cmd_stats(message: types.Message):
         await message.answer(f"⛔️ Отказано в доступе. Ваш ID: `{message.from_user.id}`", parse_mode="Markdown")
         return
 
-    total_users, total_calcs, top_users = db_get_stats()
+    total_users, total_calcs, total_clicks, v_stats, top_users = db_get_stats()
+    
+    conversion = round((total_clicks / total_calcs * 100), 1) if total_calcs else 0
 
     stats_text = (
-        "📈 **Статистика использования бота:**\n\n"
+        "📈 **Статистика Reefland Bot:**\n\n"
         f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Всего расчетов: **{total_calcs}**\n\n"
+        f"📐 Всего расчетов: **{total_calcs}**\n"
+        f"📩 Переходов к заказу: **{total_clicks}** *(Конверсия: {conversion}%)*\n\n"
+        "💧 **Распределение по объемам:**\n"
+        f"• до 50 л: **{v_stats['under_50'][1]}%** ({v_stats['under_50'][0]})\n"
+        f"• 50–150 л: **{v_stats['50_150'][1]}%** ({v_stats['50_150'][0]})\n"
+        f"• 150–300 л: **{v_stats['150_300'][1]}%** ({v_stats['150_300'][0]})\n"
+        f"• от 300 л: **{v_stats['over_300'][1]}%** ({v_stats['over_300'][0]})\n\n"
         "👤 **Список пользователей:**\n"
     )
 
     if not top_users:
         stats_text += "_Пока никто не пользовался ботом._"
     else:
-        user_lines = [f"• {name} ({username}) — расчетов: {calcs}" for name, username, calcs in top_users]
+        user_lines = [f"• {name} ({username}) — расчетов: {calcs} | кликов: {clicks}" for name, username, calcs, clicks in top_users]
         stats_text += "\n".join(user_lines)
         if total_users > 20:
             stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
 
     await message.answer(stats_text, parse_mode="Markdown")
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("lead_"))
+async def process_lead_click(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    db_increment_lead_click(user_id)
+
+    parts = callback.data.split("_")
+    if len(parts) == 5:
+        l_int, w_int, h_int, r_int = parts[1], parts[2], parts[3], parts[4]
+        calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
+    else:
+        calc_text = "Здравствуйте! Интересует стоимость изготовления аквариума."
+
+    target_url = f"https://t.me/Asteriy78?text={quote(calc_text)}"
+    
+    await callback.answer(url=target_url)
 
 
 @dp.callback_query(lambda c: c.data == "check_sub")
@@ -364,12 +429,12 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        db_increment_calc(message.from_user)
+        volume_l = int((length * width * height) / 1000)
+
+        db_increment_calc(message.from_user, volume_l)
 
         exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
-        volume_l = int((length * width * height) / 1000)
-        
         l_m = length / 100.0
         w_m = width / 100.0
         h_m = height / 100.0
