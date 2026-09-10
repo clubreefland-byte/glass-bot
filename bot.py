@@ -43,8 +43,7 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             name TEXT,
             username TEXT,
-            calculations INTEGER DEFAULT 0,
-            lead_clicks INTEGER DEFAULT 0
+            calculations INTEGER DEFAULT 0
         )
     """)
     # Таблица истории расчетов для аналитики объемов
@@ -68,8 +67,8 @@ def db_register_user(user: types.User):
     username = f"@{user.username}" if user.username else "нет username"
     
     cursor.execute("""
-        INSERT INTO users (user_id, name, username, calculations, lead_clicks)
-        VALUES (?, ?, ?, 0, 0)
+        INSERT INTO users (user_id, name, username, calculations)
+        VALUES (?, ?, ?, 0)
         ON CONFLICT(user_id) DO UPDATE SET
             name=excluded.name,
             username=excluded.username
@@ -86,23 +85,15 @@ def db_increment_calc(user: types.User, volume_l: int):
     conn.commit()
     conn.close()
 
-def db_increment_lead_click(user_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET lead_clicks = lead_clicks + 1 WHERE user_id = ?", (user_id,))
-    conn.commit()
-    conn.close()
-
 def db_get_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Общая статистика
-    cursor.execute("SELECT COUNT(*), SUM(calculations), SUM(lead_clicks) FROM users")
+    cursor.execute("SELECT COUNT(*), SUM(calculations) FROM users")
     res = cursor.fetchone()
     total_users = res[0] or 0
     total_calcs = res[1] or 0
-    total_clicks = res[2] or 0
 
     # Объемная аналитика
     cursor.execute("SELECT volume_l FROM calculations")
@@ -114,7 +105,7 @@ def db_get_stats():
     v_over_300 = sum(1 for v in volumes if v >= 300)
 
     # Топ пользователей
-    cursor.execute("SELECT name, username, calculations, lead_clicks FROM users ORDER BY calculations DESC LIMIT 20")
+    cursor.execute("SELECT name, username, calculations FROM users ORDER BY calculations DESC LIMIT 20")
     top_users = cursor.fetchall()
     conn.close()
 
@@ -125,7 +116,7 @@ def db_get_stats():
         "over_300": (v_over_300, round((v_over_300 / total_calcs * 100), 1) if total_calcs else 0)
     }
 
-    return total_users, total_calcs, total_clicks, volume_stats, top_users
+    return total_users, total_calcs, volume_stats, top_users
 
 
 async def check_user_subscription(user_id: int) -> bool:
@@ -179,13 +170,13 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     
-    calc_data_raw = f"{l_int}_{w_int}_{h_int}_{r_int}"
+    calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
+    lead_url = f"https://t.me/Asteriy78?text={quote(calc_text)}"
 
     share_text = quote(
         f"📐 Я рассчитал толщину стекла для аквариума {l_int}×{w_int}×{h_int} см!\n"
         f"Рекомендуемая толщина: {r_int} мм (Optiwhite / М1)."
     )
-
     share_url = f"https://t.me/share/url?url=https://t.me/AquaGlassCalcBot&text={share_text}"
 
     return InlineKeyboardMarkup(
@@ -193,7 +184,7 @@ def get_result_keyboard(length, width, height, rec):
             [
                 InlineKeyboardButton(
                     text="📩 Узнать стоимость изготовления", 
-                    callback_data=f"lead_{calc_data_raw}"
+                    url=lead_url
                 )
             ],
             [
@@ -322,15 +313,12 @@ async def cmd_stats(message: types.Message):
         await message.answer(f"⛔️ Отказано в доступе. Ваш ID: `{message.from_user.id}`", parse_mode="Markdown")
         return
 
-    total_users, total_calcs, total_clicks, v_stats, top_users = db_get_stats()
-    
-    conversion = round((total_clicks / total_calcs * 100), 1) if total_calcs else 0
+    total_users, total_calcs, v_stats, top_users = db_get_stats()
 
     stats_text = (
         "📈 **Статистика Reefland Bot:**\n\n"
         f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Всего расчетов: **{total_calcs}**\n"
-        f"📩 Переходов к заказу: **{total_clicks}** *(Конверсия: {conversion}%)*\n\n"
+        f"📐 Всего расчетов: **{total_calcs}**\n\n"
         "💧 **Распределение по объемам:**\n"
         f"• до 50 л: **{v_stats['under_50'][1]}%** ({v_stats['under_50'][0]})\n"
         f"• 50–150 л: **{v_stats['50_150'][1]}%** ({v_stats['50_150'][0]})\n"
@@ -342,29 +330,12 @@ async def cmd_stats(message: types.Message):
     if not top_users:
         stats_text += "_Пока никто не пользовался ботом._"
     else:
-        user_lines = [f"• {name} ({username}) — расчетов: {calcs} | кликов: {clicks}" for name, username, calcs, clicks in top_users]
+        user_lines = [f"• {name} ({username}) — расчетов: {calcs}" for name, username, calcs in top_users]
         stats_text += "\n".join(user_lines)
         if total_users > 20:
             stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
 
     await message.answer(stats_text, parse_mode="Markdown")
-
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("lead_"))
-async def process_lead_click(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    db_increment_lead_click(user_id)
-
-    parts = callback.data.split("_")
-    if len(parts) == 5:
-        l_int, w_int, h_int, r_int = parts[1], parts[2], parts[3], parts[4]
-        calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
-    else:
-        calc_text = "Здравствуйте! Интересует стоимость изготовления аквариума."
-
-    target_url = f"https://t.me/Asteriy78?text={quote(calc_text)}"
-    
-    await callback.answer(url=target_url)
 
 
 @dp.callback_query(lambda c: c.data == "check_sub")
