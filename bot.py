@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+import sqlite3
 from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -30,10 +31,61 @@ dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
 
-bot_stats = {
-    "users": {},
-    "total_calculations": 0
-}
+# --- ИНИЦИАЛИЗАЦИЯ SQLITE (БЕСПЛАТНО, ВСТРОЕНО В PYTHON) ---
+DB_PATH = "stats.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            username TEXT,
+            calculations INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def db_register_user(user: types.User):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    full_name = user.full_name or "Без имени"
+    username = f"@{user.username}" if user.username else "нет username"
+    
+    cursor.execute("""
+        INSERT INTO users (user_id, name, username, calculations)
+        VALUES (?, ?, ?, 0)
+        ON CONFLICT(user_id) DO UPDATE SET
+            name=excluded.name,
+            username=excluded.username
+    """, (user.id, full_name, username))
+    conn.commit()
+    conn.close()
+
+def db_increment_calc(user: types.User):
+    db_register_user(user)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET calculations = calculations + 1 WHERE user_id = ?", (user.id,))
+    conn.commit()
+    conn.close()
+
+def db_get_stats():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*), SUM(calculations) FROM users")
+    total_users, total_calcs = cursor.fetchone()
+    total_users = total_users or 0
+    total_calcs = total_calcs or 0
+
+    cursor.execute("SELECT name, username, calculations FROM users ORDER BY calculations DESC LIMIT 20")
+    top_users = cursor.fetchall()
+    conn.close()
+    return total_users, total_calcs, top_users
 
 
 async def check_user_subscription(user_id: int) -> bool:
@@ -87,7 +139,6 @@ def get_start_keyboard():
 def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     
-    # Использование обычных пробелов для корректного отображения сообщения в Telegram
     calc_data = f"?text=Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм."
 
     share_text = quote(
@@ -121,7 +172,6 @@ def get_result_keyboard(length, width, height, rec):
     )
 
 
-# --- ТОЧНАЯ СЕТКА СТАНДАРТОВ МАСТЕРСКОЙ REEFLAND ---
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     if height_cm <= 0 or length_cm <= 0 or width_cm <= 0:
         raise ValueError("Размеры должны быть больше нуля.")
@@ -130,9 +180,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     w = int(round(width_cm))
     h = int(round(height_cm))
 
-    # 1. Жесткая база точных стандартов Reefland (Д, Ш, В)
     EXACT_STANDARDS = {
-        # Кубическая линейка
         (30, 30, 30): 6, 
         (40, 40, 40): 6, 
         (45, 45, 45): 8, 
@@ -141,7 +189,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (70, 70, 70): 12,
         (80, 80, 80): 15,
         
-        # Прямоугольные стандарты
         (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
         (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
@@ -160,7 +207,6 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     elif key_swapped in EXACT_STANDARDS:
         rec_mm = EXACT_STANDARDS[key_swapped]
     else:
-        # 2. Правила расчёта для произвольных/нестандартных размеров
         max_side = max(length_cm, width_cm)
 
         if height_cm <= 35:
@@ -191,11 +237,9 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         else:
             rec_mm = 19
 
-    # Определение требований к рёбрам и стяжкам
     max_side = max(length_cm, width_cm)
     bracing_text = "Не требуются"
 
-    # Открытый аквариум из 15 мм допустим до 160 см длины при высоте <= 52 см
     if rec_mm == 15 and height_cm <= 52 and max_side <= 160:
         bracing_text = "Не требуются"
     elif max_side > 160 or (rec_mm == 15 and max_side >= 150 and height_cm >= 60) or height_cm >= 70:
@@ -206,26 +250,10 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     return float(rec_mm), rec_mm, bracing_text
 
 
-def register_user(user: types.User):
-    user_id = user.id
-    full_name = user.full_name or "Без имени"
-    username = f"@{user.username}" if user.username else "нет username"
-    
-    if user_id not in bot_stats["users"]:
-        bot_stats["users"][user_id] = {
-            "name": full_name,
-            "username": username,
-            "calculations": 0
-        }
-    else:
-        bot_stats["users"][user_id]["name"] = full_name
-        bot_stats["users"][user_id]["username"] = username
-
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    register_user(message.from_user)
+    db_register_user(message.from_user)
 
     if not await check_user_subscription(user_id):
         await message.answer(
@@ -254,8 +282,7 @@ async def cmd_stats(message: types.Message):
         await message.answer(f"⛔️ Отказано в доступе. Ваш ID: `{message.from_user.id}`", parse_mode="Markdown")
         return
 
-    total_users = len(bot_stats["users"])
-    total_calcs = bot_stats["total_calculations"]
+    total_users, total_calcs, top_users = db_get_stats()
 
     stats_text = (
         "📈 **Статистика использования бота:**\n\n"
@@ -264,16 +291,10 @@ async def cmd_stats(message: types.Message):
         "👤 **Список пользователей:**\n"
     )
 
-    if not bot_stats["users"]:
+    if not top_users:
         stats_text += "_Пока никто не пользовался ботом._"
     else:
-        user_lines = []
-        for uid, data in list(bot_stats["users"].items())[-20:]:
-            name = data["name"]
-            username = data["username"]
-            calcs = data["calculations"]
-            user_lines.append(f"• {name} ({username}) — расчетов: {calcs}")
-        
+        user_lines = [f"• {name} ({username}) — расчетов: {calcs}" for name, username, calcs in top_users]
         stats_text += "\n".join(user_lines)
         if total_users > 20:
             stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
@@ -284,7 +305,7 @@ async def cmd_stats(message: types.Message):
 @dp.callback_query(lambda c: c.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    register_user(callback.from_user)
+    db_register_user(callback.from_user)
     
     if await check_user_subscription(user_id):
         await callback.message.edit_text(
@@ -302,12 +323,11 @@ async def process_check_sub(callback: types.CallbackQuery):
 
 @dp.message()
 async def process_calc(message: types.Message):
-    # Игнорируем любые команды, чтобы они не перехватывались как размеры
     if message.text and message.text.startswith("/"):
         return
 
     user_id = message.from_user.id
-    register_user(message.from_user)
+    db_register_user(message.from_user)
 
     if not await check_user_subscription(user_id):
         await message.answer(
@@ -335,7 +355,6 @@ async def process_calc(message: types.Message):
         width = float(parts[1])
         height = float(parts[2])
 
-        # Автоперевод из миллиметров в сантиметры
         if length > 300 or width > 300 or height > 300:
             length /= 10.0
             width /= 10.0
@@ -345,8 +364,7 @@ async def process_calc(message: types.Message):
             await message.answer("⚠️ Все размеры должны быть больше 0.")
             return
 
-        bot_stats["total_calculations"] += 1
-        bot_stats["users"][user_id]["calculations"] += 1
+        db_increment_calc(message.from_user)
 
         exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
