@@ -42,6 +42,8 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 volume_l INTEGER,
+                dimensions TEXT,
+                calc_type TEXT DEFAULT 'order',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -68,13 +70,16 @@ def db_register_user(user: types.User):
     except Exception as e:
         logging.error(f"Ошибка регистрации БД: {e}")
 
-def db_increment_calc(user: types.User, volume_l: int):
+def db_increment_calc(user: types.User, volume_l: int, dimensions: str, calc_type: str):
     try:
         db_register_user(user)
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET calculations = calculations + 1 WHERE user_id = ?", (user.id,))
-        cursor.execute("INSERT INTO calculations (user_id, volume_l) VALUES (?, ?)", (user.id, volume_l))
+        cursor.execute("""
+            INSERT INTO calculations (user_id, volume_l, dimensions, calc_type) 
+            VALUES (?, ?, ?, ?)
+        """, (user.id, volume_l, dimensions, calc_type))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -90,22 +95,59 @@ def db_get_stats() -> str:
         
         cursor.execute("SELECT COUNT(*) FROM calculations")
         total_calcs = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT COUNT(*) FROM calculations WHERE calc_type = 'order'")
+        order_calcs = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT COUNT(*) FROM calculations WHERE calc_type = 'diy'")
+        diy_calcs = cursor.fetchone()[0] or 0
         
-        cursor.execute("SELECT AVG(volume_l) FROM calculations")
-        avg_vol_res = cursor.fetchone()[0]
-        avg_vol = int(avg_vol_res) if avg_vol_res else 0
-        
+        cursor.execute("SELECT AVG(volume_l), MIN(volume_l), MAX(volume_l) FROM calculations")
+        avg_v, min_v, max_v = cursor.fetchone()
+        avg_vol = int(avg_v) if avg_v else 0
+        min_vol = min_v if min_v else 0
+        max_vol = max_v if max_v else 0
+
+        cursor.execute("""
+            SELECT dimensions, COUNT(*) as cnt 
+            FROM calculations 
+            WHERE dimensions IS NOT NULL 
+            GROUP BY dimensions 
+            ORDER BY cnt DESC LIMIT 3
+        """)
+        top_dims = cursor.fetchall()
+        top_text = "\n".join([f"  • <code>{d[0]}</code> — {d[1]} раз(а)" for d in top_dims]) if top_dims else "  • Нет данных"
+
+        cursor.execute("""
+            SELECT u.name, u.username, c.dimensions, c.calc_type, c.created_at 
+            FROM calculations c
+            JOIN users u ON c.user_id = u.user_id
+            ORDER BY c.id DESC LIMIT 5
+        """)
+        recent = cursor.fetchall()
+        recent_list = []
+        for r in recent:
+            t_icon = "🏢 Заказ" if r[3] == 'order' else "🛠 DIY"
+            recent_list.append(f"• {r[0]} ({r[1]}): <code>{r[2]}</code> [{t_icon}]")
+        recent_text = "\n".join(recent_list) if recent_list else "• Запросов пока нет"
+
         conn.close()
         
         return (
-            f"📊 <b>Статистика бота Reefland</b>\n\n"
-            f"👤 Уникальных пользователей: <b>{total_users}</b>\n"
-            f"🧮 Выполнено расчетов: <b>{total_calcs}</b>\n"
-            f"💧 Средний объем: <b>~{avg_vol} л</b>"
+            f"📊 <b>РАСШИРЕННАЯ СТАТИСТИКА REEFLAND</b>\n\n"
+            f"👥 <b>Пользователи и активность:</b>\n"
+            f"• Всего пользователей: <b>{total_users}</b>\n"
+            f"• Всего расчетов: <b>{total_calcs}</b>\n"
+            f"  — Заявки Reefland (под ключ): <b>{order_calcs}</b>\n"
+            f"  — Сравнение / Своими руками: <b>{diy_calcs}</b>\n\n"
+            f"💧 <b>Объемы и популярные габариты:</b>\n"
+            f"• Средний объем: <b>~{avg_vol} л</b> (мин: {min_vol}л | макс: {max_vol}л)\n"
+            f"• Топ запрашиваемых размеров:\n{top_text}\n\n"
+            f"📋 <b>Последние 5 расчетов:</b>\n{recent_text}"
         )
     except Exception as e:
         logging.error(f"Ошибка чтения статистики: {e}")
-        return "❌ Не удалось получить статистику из базы данных."
+        return "❌ Не удалось получить расширенную статистику."
 
 async def check_user_subscription(user_id: int) -> bool:
     if not bot:
@@ -247,7 +289,10 @@ async def process_calc_choice(callback: types.CallbackQuery):
         height = int(float(parts[3]))
 
         volume_l = int((length * width * height) / 1000)
-        db_increment_calc(callback.from_user, volume_l)
+        dimensions_str = f"{length}x{width}x{height}"
+        calc_type_str = "order" if action == "o" else "diy"
+
+        db_increment_calc(callback.from_user, volume_l, dimensions_str, calc_type_str)
         exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
 
         l_m, w_m, h_m = length / 100.0, width / 100.0, height / 100.0
