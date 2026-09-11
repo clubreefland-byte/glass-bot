@@ -1,4 +1,3 @@
-import asyncio
 import os
 import logging
 import sqlite3
@@ -10,85 +9,83 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "https://glass-bot-pcbh.onrender.com").rstrip("/")
 
 ADMIN_ID = 1318763491
-
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
-
+WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}"
 PORT = int(os.getenv("PORT", 10000))
 
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
-
-# --- SQLITE ---
 DB_PATH = "stats.db"
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            name TEXT,
-            username TEXT,
-            calculations INTEGER DEFAULT 0
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS calculations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            volume_l INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                name TEXT,
+                username TEXT,
+                calculations INTEGER DEFAULT 0
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calculations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                volume_l INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Ошибка БД init: {e}")
 
 init_db()
 
 def db_register_user(user: types.User):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    full_name = user.full_name or "Без имени"
-    username = f"@{user.username}" if user.username else "нет username"
-    
-    cursor.execute("""
-        INSERT INTO users (user_id, name, username, calculations)
-        VALUES (?, ?, ?, 0)
-        ON CONFLICT(user_id) DO UPDATE SET
-            name=excluded.name,
-            username=excluded.username
-    """, (user.id, full_name, username))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        full_name = user.full_name or "Без имени"
+        username = f"@{user.username}" if user.username else "нет username"
+        cursor.execute("""
+            INSERT INTO users (user_id, name, username, calculations)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, username=excluded.username
+        """, (user.id, full_name, username))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Ошибка регистрация БД: {e}")
 
 def db_increment_calc(user: types.User, volume_l: int):
-    db_register_user(user)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET calculations = calculations + 1 WHERE user_id = ?", (user.id,))
-    cursor.execute("INSERT INTO calculations (user_id, volume_l) VALUES (?, ?)", (user.id, volume_l))
-    conn.commit()
-    conn.close()
+    try:
+        db_register_user(user)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET calculations = calculations + 1 WHERE user_id = ?", (user.id,))
+        cursor.execute("INSERT INTO calculations (user_id, volume_l) VALUES (?, ?)", (user.id, volume_l))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Ошибка инкремента БД: {e}")
 
 async def check_user_subscription(user_id: int) -> bool:
     if not bot:
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        if member.status in ["creator", "administrator", "member"]:
-            return True
-        return False
+        return member.status in ["creator", "administrator", "member"]
     except Exception as e:
         logging.error(f"Ошибка проверки подписки: {e}")
         return True
@@ -113,7 +110,6 @@ def get_result_keyboard(length, width, height, rec):
     l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
     calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм (Optiwhite)."
     lead_url = f"https://t.me/Asteriy78?text={quote(calc_text)}"
-
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💬 Рассчитать стоимость сборки под ключ", url=lead_url)],
@@ -123,7 +119,6 @@ def get_result_keyboard(length, width, height, rec):
 
 def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: float) -> tuple[float, int, str]:
     l, w, h = int(round(length_cm)), int(round(width_cm)), int(round(height_cm))
-
     EXACT_STANDARDS = {
         (30, 30, 30): 6, (40, 40, 40): 6, (45, 45, 45): 8, (50, 50, 50): 8,   
         (60, 60, 60): 10, (70, 70, 70): 12, (80, 80, 80): 15,
@@ -158,55 +153,28 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 
     return float(rec_mm), rec_mm, bracing_text
 
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    user_id = message.from_user.id
     db_register_user(message.from_user)
-
-    if not await check_user_subscription(user_id):
-        await message.answer(
-            "🔒 **Доступ ограничен!**\n\nПодпишитесь на канал **Аквариумная мастерская Reefland**.",
-            parse_mode="Markdown", reply_markup=get_subscribe_keyboard()
-        )
+    if not await check_user_subscription(message.from_user.id):
+        await message.answer("🔒 **Доступ ограничен!**\n\nПодпишитесь на канал **Аквариумная мастерская Reefland**.", parse_mode="Markdown", reply_markup=get_subscribe_keyboard())
         return
-
-    await message.answer(
-        "🛠 **Аквариумная мастерская Reefland**\n\n"
-        "Расчет параметров и надежности для проектирования аквариумов.\n\n"
-        "Отправьте размеры: Длина Ширина Высота (см).\n"
-        "Пример: `150х60х60` или `150 60 60`",
-        parse_mode="Markdown"
-    )
-
+    await message.answer("🛠 **Аквариумная мастерская Reefland**\n\nОтправьте размеры: Длина Ширина Высота (см).\nПример: `150х60х60`", parse_mode="Markdown")
 
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     await callback.answer()
-    user_id = callback.from_user.id
-    db_register_user(callback.from_user)
-    
-    if await check_user_subscription(user_id):
-        await bot.send_message(
-            chat_id=user_id,
-            text="🛠 **Аквариумная мастерская Reefland**\n\n"
-                 "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
-                 "Отправьте размеры: Длина Ширина Высота (см).\n"
-                 "Пример: `150х60х60` или `150 60 60`",
-            parse_mode="Markdown"
-        )
+    if await check_user_subscription(callback.from_user.id):
+        await bot.send_message(chat_id=callback.from_user.id, text="🛠 **Аквариумная мастерская Reefland**\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="Markdown")
     else:
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
-
 
 @dp.message()
 async def process_calc_input(message: types.Message):
     if message.text and message.text.startswith("/"): return
-
-    user_id = message.from_user.id
     db_register_user(message.from_user)
 
-    if not await check_user_subscription(user_id):
+    if not await check_user_subscription(message.from_user.id):
         await message.answer("🔒 Подпишитесь на канал для использования бота.", reply_markup=get_subscribe_keyboard())
         return
 
@@ -219,32 +187,28 @@ async def process_calc_input(message: types.Message):
 
     try:
         l, w, h = float(parts[0]), float(parts[1]), float(parts[2])
-        if l > 300 or w > 300 or h > 300:
-            l, w, h = l / 10.0, w / 10.0, h / 10.0
-
-        if l <= 0 or w <= 0 or h <= 0:
-            await message.answer("⚠️ Размеры должны быть больше 0.")
-            return
+        if l > 300 or w > 300 or h > 300: l, w, h = l / 10.0, w / 10.0, h / 10.0
+        if l <= 0 or w <= 0 or h <= 0: return
 
         l_int, w_int, h_int = int(round(l)), int(round(w)), int(round(h))
-
         await message.answer(
-            f"📐 Размеры: **{l_int}×{w_int}×{h_int} см** (~{int((l*w*h)/1000)} л)\n\n"
-            "Уточните цель расчета, чтобы получить корректную рекомендацию:",
-            parse_mode="Markdown",
-            reply_markup=get_intent_keyboard(l_int, w_int, h_int)
+            f"📐 Размеры: **{l_int}×{w_int}×{h_int} см** (~{int((l*w*h)/1000)} л)\n\nУточните цель расчета:",
+            parse_mode="Markdown", reply_markup=get_intent_keyboard(l_int, w_int, h_int)
         )
-
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
-
-@dp.callback_query(F.data.startswith("o_") | F.data.startswith("d_"))
+@dp.callback_query()
 async def process_calc_choice(callback: types.CallbackQuery):
+    logging.info(f"---> ВХОД В CALLBACK: data={callback.data}, user={callback.from_user.id}")
     await callback.answer()
     
     data = callback.data
     user_id = callback.from_user.id
+
+    if not (data.startswith("o_") or data.startswith("d_")):
+        return
+
     try:
         parts = data.split("_")
         action = parts[0]
@@ -268,24 +232,17 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite M1)\n"
                 f"• Рёбра и стяжки: **{bracing_text}**\n"
                 f"• Вес стекла: **~{glass_weight_kg} кг** | С водой: **~{total_weight_kg} кг**\n\n"
-                f"💡 *В стоимость изготовления входит полировка еврокромки, сборка на силикон высокой прочности и проверка геометрии.*"
+                f"💡 *В стоимость входит полировка еврокромки и сборка на высокопрочный силикон.*"
             )
-            await bot.send_message(
-                chat_id=user_id,
-                text=res_text,
-                parse_mode="Markdown",
-                reply_markup=get_result_keyboard(length, width, height, rec)
-            )
+            try:
+                await bot.send_message(chat_id=user_id, text=res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
+                logging.info(f"---> УСПЕШНО ОТПРАВЛЕНО ПОЛЬЗОВАТЕЛЮ {user_id}")
+            except Exception as send_err:
+                logging.error(f"❌ ОШИБКА ОТПРАВКИ ПОЛЬЗОВАТЕЛЮ: {send_err}")
 
             try:
                 user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
-                await bot.send_message(
-                    ADMIN_ID,
-                    f"🔥 **НОВАЯ ЗАЯВКА НА ЗАКАЗ!**\n\n"
-                    f"Клиент: {callback.from_user.full_name} ({user_info})\n"
-                    f"Размеры: {length:.0f}×{width:.0f}×{height:.0f} см ({volume_l} л)\n"
-                    f"Толщина стекла: {rec} мм"
-                )
+                await bot.send_message(ADMIN_ID, f"🔥 **ЗАЯВКА!**\n\nКлиент: {callback.from_user.full_name} ({user_info})\nРазмеры: {length:.0f}×{width:.0f}×{height:.0f} см")
             except Exception as e:
                 logging.error(f"Ошибка отправки админу: {e}")
 
@@ -293,24 +250,22 @@ async def process_calc_choice(callback: types.CallbackQuery):
             res_text = (
                 f"📐 **Базовый расчёт толщины:**\n\n"
                 f"Размеры: {length:.0f} × {width:.0f} × {height:.0f} см\n"
-                f"Минимальная толщина стекла: **{rec} мм**\n\n"
-                f"⚠️ *Примечание: Для самостоятельной сборки учитывайте запас прочности шва, усадку силикона и точность горизонта основания.*"
+                f"Минимальная толщина стекла: **{rec} мм**"
             )
-            await bot.send_message(
-                chat_id=user_id,
-                text=res_text,
-                parse_mode="Markdown"
-            )
+            try:
+                await bot.send_message(chat_id=user_id, text=res_text, parse_mode="Markdown")
+                logging.info(f"---> УСПЕШНО ОТПРАВЛЕНО ПОЛЬЗОВАТЕЛЮ {user_id}")
+            except Exception as send_err:
+                logging.error(f"❌ ОШИБКА ОТПРАВКИ ПОЛЬЗОВАТЕЛЮ: {send_err}")
 
     except Exception as e:
-        logging.error(f"Ошибка при обработке кнопки: {e}")
-
+        logging.error(f"Ошибка внутри Callback: {e}")
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
         await bot.delete_webhook(drop_pending_updates=True)
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
-        logging.info(f"Webhook установлен: {WEBHOOK_URL}")
+        logging.info(f"УСПЕШНО УСТАНОВЛЕН WEBHOOK: {WEBHOOK_URL}")
 
 async def handle_ping(request):
     return web.Response(text="OK", status=200)
