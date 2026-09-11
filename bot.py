@@ -157,17 +157,24 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
 async def cmd_start(message: types.Message):
     db_register_user(message.from_user)
     if not await check_user_subscription(message.from_user.id):
-        await message.answer("🔒 **Доступ ограничен!**\n\nПодпишитесь на канал **Аквариумная мастерская Reefland**.", parse_mode="Markdown", reply_markup=get_subscribe_keyboard())
+        await message.answer("🔒 <b>Доступ ограничен!</b>\n\nПодпишитесь на канал <b>Аквариумная мастерская Reefland</b>.", parse_mode="HTML", reply_markup=get_subscribe_keyboard())
         return
-    await message.answer("🛠 **Аквариумная мастерская Reefland**\n\nОтправьте размеры: Длина Ширина Высота (см).\nПример: `150х60х60`", parse_mode="Markdown")
+    await message.answer("🛠 <b>Аквариумная мастерская Reefland</b>\n\nОтправьте размеры: Длина Ширина Высота (см).\nПример: <code>150х60х60</code>", parse_mode="HTML")
 
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
-    await callback.answer()
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     if await check_user_subscription(callback.from_user.id):
-        await bot.send_message(chat_id=callback.from_user.id, text="🛠 **Аквариумная мастерская Reefland**\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="Markdown")
+        await bot.send_message(chat_id=callback.from_user.id, text="🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
     else:
-        await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+        try:
+            await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+        except Exception:
+            pass
 
 @dp.message()
 async def process_calc_input(message: types.Message):
@@ -182,7 +189,7 @@ async def process_calc_input(message: types.Message):
     parts = text.split()
 
     if len(parts) != 3:
-        await message.answer("❌ Укажите 3 числа: Длина Ширина Высота (см).\nПример: `150х60х60`", parse_mode="Markdown")
+        await message.answer("❌ Укажите 3 числа: Длина Ширина Высота (см).\nПример: <code>150х60х60</code>", parse_mode="HTML")
         return
 
     try:
@@ -192,17 +199,19 @@ async def process_calc_input(message: types.Message):
 
         l_int, w_int, h_int = int(round(l)), int(round(w)), int(round(h))
         await message.answer(
-            f"📐 Размеры: **{l_int}×{w_int}×{h_int} см** (~{int((l*w*h)/1000)} л)\n\nУточните цель расчета:",
-            parse_mode="Markdown", reply_markup=get_intent_keyboard(l_int, w_int, h_int)
+            f"📐 Размеры: <b>{l_int}×{w_int}×{h_int} см</b> (~{int((l*w*h)/1000)} л)\n\nУточните цель расчета:",
+            parse_mode="HTML", reply_markup=get_intent_keyboard(l_int, w_int, h_int)
         )
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
 @dp.callback_query()
 async def process_calc_choice(callback: types.CallbackQuery):
-    logging.info(f"---> ВХОД В CALLBACK: data={callback.data}, user={callback.from_user.id}")
-    await callback.answer()
-    
+    try:
+        await callback.answer()
+    except Exception as e:
+        logging.warning(f"Callback answer error: {e}")
+
     data = callback.data
     user_id = callback.from_user.id
 
@@ -225,41 +234,46 @@ async def process_calc_choice(callback: types.CallbackQuery):
 
         if action == "o":
             res_text = (
-                f"🛠 **Аквариумная мастерская Reefland**\n\n"
-                f"📐 **Проект аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
-                f"💧 **Объём:** ~{volume_l} л\n\n"
-                f"📊 **Спецификация Reefland:**\n"
-                f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite M1)\n"
-                f"• Рёбра и стяжки: **{bracing_text}**\n"
-                f"• Вес стекла: **~{glass_weight_kg} кг** | С водой: **~{total_weight_kg} кг**\n\n"
-                f"💡 *В стоимость входит полировка еврокромки и сборка на высокопрочный силикон.*"
+                f"🛠 <b>Аквариумная мастерская Reefland</b>\n\n"
+                f"📐 <b>Проект аквариума:</b> {length:.0f} × {width:.0f} × {height:.0f} см\n"
+                f"💧 <b>Объём:</b> ~{volume_l} л\n\n"
+                f"📊 <b>Спецификация Reefland:</b>\n"
+                f"• Рекомендуемое стекло: <b>{rec} мм</b> (Optiwhite M1)\n"
+                f"• Рёбра и стяжки: <b>{bracing_text}</b>\n"
+                f"• Вес стекла: <b>~{glass_weight_kg} кг</b> | С водой: <b>~{total_weight_kg} кг</b>\n\n"
+                f"💡 <i>В стоимость входит полировка еврокромки и сборка на высокопрочный силикон.</i>"
             )
-            try:
-                await bot.send_message(chat_id=user_id, text=res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
-                logging.info(f"---> УСПЕШНО ОТПРАВЛЕНО ПОЛЬЗОВАТЕЛЮ {user_id}")
-            except Exception as send_err:
-                logging.error(f"❌ ОШИБКА ОТПРАВКИ ПОЛЬЗОВАТЕЛЮ: {send_err}")
+            await bot.send_message(
+                chat_id=user_id,
+                text=res_text,
+                parse_mode="HTML",
+                reply_markup=get_result_keyboard(length, width, height, rec)
+            )
 
             try:
                 user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
-                await bot.send_message(ADMIN_ID, f"🔥 **ЗАЯВКА!**\n\nКлиент: {callback.from_user.full_name} ({user_info})\nРазмеры: {length:.0f}×{width:.0f}×{height:.0f} см")
+                await bot.send_message(
+                    ADMIN_ID,
+                    f"🔥 <b>ЗАЯВКА!</b>\n\nКлиент: {callback.from_user.full_name} ({user_info})\nРазмеры: {length:.0f}×{width:.0f}×{height:.0f} см",
+                    parse_mode="HTML"
+                )
             except Exception as e:
                 logging.error(f"Ошибка отправки админу: {e}")
 
         else:
             res_text = (
-                f"📐 **Базовый расчёт толщины:**\n\n"
+                f"📐 <b>Базовый расчёт толщины:</b>\n\n"
                 f"Размеры: {length:.0f} × {width:.0f} × {height:.0f} см\n"
-                f"Минимальная толщина стекла: **{rec} мм**"
+                f"Минимальная толщина стекла: <b>{rec} мм</b>"
             )
-            try:
-                await bot.send_message(chat_id=user_id, text=res_text, parse_mode="Markdown")
-                logging.info(f"---> УСПЕШНО ОТПРАВЛЕНО ПОЛЬЗОВАТЕЛЮ {user_id}")
-            except Exception as send_err:
-                logging.error(f"❌ ОШИБКА ОТПРАВКИ ПОЛЬЗОВАТЕЛЮ: {send_err}")
+            await bot.send_message(
+                chat_id=user_id,
+                text=res_text,
+                parse_mode="HTML"
+            )
 
     except Exception as e:
-        logging.error(f"Ошибка внутри Callback: {e}")
+        logging.error(f"❌ Критическая ошибка в Callback: {e}")
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
