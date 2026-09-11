@@ -193,7 +193,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
         (45, 30, 30): 6, (60, 30, 36): 6, (60, 30, 40): 6, 
         (60, 40, 40): 8, (60, 45, 45): 8, (80, 35, 40): 8, 
         (80, 45, 45): 10, (90, 45, 45): 10, (90, 50, 50): 10, (100, 40, 40): 10, (100, 45, 45): 10, 
-        (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
+        (120, 45, 45): 12, (70, 60, 60): 12, (90, 60, 60): 12, (100, 50, 50): 12, (120, 50, 50): 12, (120, 50, 60): 12,
         (120, 60, 60): 15, (150, 60, 50): 15, (160, 50, 50): 15,
         (150, 50, 50): 15, (150, 50, 60): 15, (150, 60, 60): 15, (160, 60, 60): 15,
         (170, 60, 50): 15, (170, 60, 60): 15, (180, 60, 50): 15,
@@ -205,7 +205,7 @@ def calculate_glass_thickness(length_cm: float, width_cm: float, height_cm: floa
     else:
         max_side = max(length_cm, width_cm)
         if height_cm <= 35: rec_mm = 6 if max_side <= 60 else (8 if max_side <= 100 else 10)
-        elif height_cm <= 45: rec_mm = 6 if max_side <= 60 else (8 if max_side <= 90 else (10 if max_side <= 120 else 12))
+        elif height_cm <= 45: rec_mm = 6 if max_side <= 60 else (8 if max_side <= 90 else (10 if max_side < 120 else 12))
         elif height_cm <= 52: rec_mm = 8 if max_side <= 55 else (10 if max_side <= 100 else (12 if max_side <= 140 else 15))
         elif height_cm <= 62: rec_mm = 10 if max_side <= 65 else (12 if max_side <= 130 else 15)
         elif height_cm <= 72: rec_mm = 15
