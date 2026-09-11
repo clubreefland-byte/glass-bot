@@ -46,7 +46,7 @@ def init_db():
             calculations INTEGER DEFAULT 0
         )
     """)
-    # Таблица истории расчетов для аналитики объемов
+    # Таблица истории расчетов
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS calculations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +89,7 @@ def db_get_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Общая статистика
+    # Общая статистика пользователей
     cursor.execute("SELECT COUNT(*), SUM(calculations) FROM users")
     res = cursor.fetchone()
     total_users = res[0] or 0
@@ -97,7 +97,9 @@ def db_get_stats():
 
     # Объемная аналитика
     cursor.execute("SELECT volume_l FROM calculations")
-    volumes = [r[0] for r in cursor.fetchall()]
+    volumes = [r[0] for r in cursor.fetchall() if r[0] is not None]
+    
+    calc_count = len(volumes) if len(volumes) > 0 else total_calcs
 
     v_under_50 = sum(1 for v in volumes if v < 50)
     v_50_150 = sum(1 for v in volumes if 50 <= v < 150)
@@ -110,10 +112,10 @@ def db_get_stats():
     conn.close()
 
     volume_stats = {
-        "under_50": (v_under_50, round((v_under_50 / total_calcs * 100), 1) if total_calcs else 0),
-        "50_150": (v_50_150, round((v_50_150 / total_calcs * 100), 1) if total_calcs else 0),
-        "150_300": (v_150_300, round((v_150_300 / total_calcs * 100), 1) if total_calcs else 0),
-        "over_300": (v_over_300, round((v_over_300 / total_calcs * 100), 1) if total_calcs else 0)
+        "under_50": (v_under_50, round((v_under_50 / calc_count * 100), 1) if calc_count else 0),
+        "50_150": (v_50_150, round((v_50_150 / calc_count * 100), 1) if calc_count else 0),
+        "150_300": (v_150_300, round((v_150_300 / calc_count * 100), 1) if calc_count else 0),
+        "over_300": (v_over_300, round((v_over_300 / calc_count * 100), 1) if calc_count else 0)
     }
 
     return total_users, total_calcs, volume_stats, top_users
@@ -313,29 +315,33 @@ async def cmd_stats(message: types.Message):
         await message.answer(f"⛔️ Отказано в доступе. Ваш ID: `{message.from_user.id}`", parse_mode="Markdown")
         return
 
-    total_users, total_calcs, v_stats, top_users = db_get_stats()
+    try:
+        total_users, total_calcs, v_stats, top_users = db_get_stats()
 
-    stats_text = (
-        "📈 **Статистика Reefland Bot:**\n\n"
-        f"👥 Уникальных пользователей: **{total_users}**\n"
-        f"📐 Всего расчетов: **{total_calcs}**\n\n"
-        "💧 **Распределение по объемам:**\n"
-        f"• до 50 л: **{v_stats['under_50'][1]}%** ({v_stats['under_50'][0]})\n"
-        f"• 50–150 л: **{v_stats['50_150'][1]}%** ({v_stats['50_150'][0]})\n"
-        f"• 150–300 л: **{v_stats['150_300'][1]}%** ({v_stats['150_300'][0]})\n"
-        f"• от 300 л: **{v_stats['over_300'][1]}%** ({v_stats['over_300'][0]})\n\n"
-        "👤 **Список пользователей:**\n"
-    )
+        stats_text = (
+            "📈 **Статистика Reefland Bot:**\n\n"
+            f"👥 Уникальных пользователей: **{total_users}**\n"
+            f"📐 Всего расчетов: **{total_calcs}**\n\n"
+            "💧 **Распределение по объемам:**\n"
+            f"• до 50 л: **{v_stats['under_50'][1]}%** ({v_stats['under_50'][0]})\n"
+            f"• 50–150 л: **{v_stats['50_150'][1]}%** ({v_stats['50_150'][0]})\n"
+            f"• 150–300 л: **{v_stats['150_300'][1]}%** ({v_stats['150_300'][0]})\n"
+            f"• от 300 л: **{v_stats['over_300'][1]}%** ({v_stats['over_300'][0]})\n\n"
+            "👤 **Список пользователей:**\n"
+        )
 
-    if not top_users:
-        stats_text += "_Пока никто не пользовался ботом._"
-    else:
-        user_lines = [f"• {name} ({username}) — расчетов: {calcs}" for name, username, calcs in top_users]
-        stats_text += "\n".join(user_lines)
-        if total_users > 20:
-            stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
+        if not top_users:
+            stats_text += "_Пока никто не пользовался ботом._"
+        else:
+            user_lines = [f"• {name} ({username}) — расчетов: {calcs}" for name, username, calcs in top_users]
+            stats_text += "\n".join(user_lines)
+            if total_users > 20:
+                stats_text += f"\n\n_...и еще {total_users - 20} пользователей._"
 
-    await message.answer(stats_text, parse_mode="Markdown")
+        await message.answer(stats_text, parse_mode="Markdown")
+    except Exception as e:
+        logging.error(f"Ошибка при сборе статистики: {e}")
+        await message.answer(f"⚠️ Ошибка вывода статистики: `{e}`", parse_mode="Markdown")
 
 
 @dp.callback_query(lambda c: c.data == "check_sub")
