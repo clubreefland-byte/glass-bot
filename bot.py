@@ -6,8 +6,6 @@ from urllib.parse import quote
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
@@ -31,10 +29,6 @@ bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
 CHANNEL_USERNAME = "@club_reefland"
-
-# --- FSM ДЛЯ КВАЛИФИКАЦИИ ---
-class CalcState(StatesGroup):
-    waiting_for_intent = State()
 
 # --- SQLITE ---
 DB_PATH = "stats.db"
@@ -108,11 +102,11 @@ def get_subscribe_keyboard():
         ]
     )
 
-def get_intent_keyboard():
+def get_intent_keyboard(l: int, w: int, h: int):
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data="intent_order")],
-            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data="intent_diy")]
+            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"order_{l}_{w}_{h}")],
+            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data=f"diy_{l}_{w}_{h}")]
         ]
     )
 
@@ -187,8 +181,25 @@ async def cmd_start(message: types.Message):
     )
 
 
+@dp.callback_query(lambda c: c.data == "check_sub")
+async def process_check_sub(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    db_register_user(callback.from_user)
+    
+    if await check_user_subscription(user_id):
+        await callback.message.edit_text(
+            "🛠 **Аквариумная мастерская Reefland**\n\n"
+            "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
+            "Отправьте размеры: Длина Ширина Высота (см).\n"
+            "Пример: `150х60х60` или `150 60 60`",
+            parse_mode="Markdown"
+        )
+    else:
+        await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+
+
 @dp.message()
-async def process_calc_input(message: types.Message, state: FSMContext):
+async def process_calc_input(message: types.Message):
     if message.text and message.text.startswith("/"): return
 
     user_id = message.from_user.id
@@ -214,30 +225,26 @@ async def process_calc_input(message: types.Message, state: FSMContext):
             await message.answer("⚠️ Размеры должны быть больше 0.")
             return
 
-        # Сохраняем размеры во временное состояние FSM
-        await state.update_data(length=l, width=w, height=h)
-        await state.set_state(CalcState.waiting_for_intent)
+        l_int, w_int, h_int = int(round(l)), int(round(w)), int(round(h))
 
         await message.answer(
-            f"📐 Размеры: **{l:.0f}×{w:.0f}×{h:.0f} см** (~{int((l*w*h)/1000)} л)\n\n"
+            f"📐 Размеры: **{l_int}×{w_int}×{h_int} см** (~{int((l*w*h)/1000)} л)\n\n"
             "Уточните цель расчета, чтобы получить корректную рекомендацию:",
             parse_mode="Markdown",
-            reply_markup=get_intent_keyboard()
+            reply_markup=get_intent_keyboard(l_int, w_int, h_int)
         )
 
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
 
-@dp.callback_query(CalcState.waiting_for_intent)
-async def process_intent_choice(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    length, width, height = data.get("length"), data.get("width"), data.get("height")
+@dp.callback_query(lambda c: c.data and (c.data.startswith("order_") or c.data.startswith("diy_")))
+async def process_intent_choice(callback: types.CallbackQuery):
+    await callback.answer()
     
-    if not length:
-        await callback.answer("Сессия истекла. Введите размеры заново.")
-        await state.clear()
-        return
+    parts = callback.data.split("_")
+    action = parts[0]
+    length, width, height = float(parts[1]), float(parts[2]), float(parts[3])
 
     volume_l = int((length * width * height) / 1000)
     db_increment_calc(callback.from_user, volume_l)
@@ -249,7 +256,7 @@ async def process_intent_choice(callback: types.CallbackQuery, state: FSMContext
     total_weight_kg = int(glass_weight_kg + volume_l)
 
     # Вариант А: Заказчик (Целевой лид)
-    if callback.data == "intent_order":
+    if action == "order":
         res_text = (
             f"🛠 **Аквариумная мастерская Reefland**\n\n"
             f"📐 **Проект аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
@@ -262,7 +269,7 @@ async def process_intent_choice(callback: types.CallbackQuery, state: FSMContext
         )
         await callback.message.edit_text(res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
 
-        # Уведомление мастеру о ГОРЯЧЕМ ЛИДЕ
+        # Уведомление мастеру
         try:
             user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
             await bot.send_message(
@@ -275,7 +282,7 @@ async def process_intent_choice(callback: types.CallbackQuery, state: FSMContext
         except Exception as e:
             logging.error(f"Не удалось отправить уведомление админу: {e}")
 
-    # Вариант Б: Самодельщик / Пробивала
+    # Вариант Б: Самодельщик
     else:
         res_text = (
             f"📐 **Базовый расчёт толщины:**\n\n"
@@ -284,8 +291,6 @@ async def process_intent_choice(callback: types.CallbackQuery, state: FSMContext
             f"⚠️ *Примечание: Для самостоятельной сборки учитывайте запас прочности шва, усадку силикона и точность горизонта основания.*"
         )
         await callback.message.edit_text(res_text, parse_mode="Markdown")
-
-    await state.clear()
 
 
 async def on_startup(app: web.Application):
