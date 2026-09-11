@@ -7,7 +7,6 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
@@ -105,8 +104,8 @@ def get_subscribe_keyboard():
 def get_intent_keyboard(l: int, w: int, h: int):
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"order_{l}_{w}_{h}")],
-            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data=f"diy_{l}_{w}_{h}")]
+            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"o_{l}_{w}_{h}")],
+            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data=f"d_{l}_{w}_{h}")]
         ]
     )
 
@@ -181,7 +180,6 @@ async def cmd_start(message: types.Message):
     )
 
 
-@dp.callback_query(lambda c: c.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     db_register_user(callback.from_user)
@@ -238,59 +236,69 @@ async def process_calc_input(message: types.Message):
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
 
-@dp.callback_query(lambda c: c.data and (c.data.startswith("order_") or c.data.startswith("diy_")))
-async def process_intent_choice(callback: types.CallbackQuery):
+@dp.callback_query()
+async def process_all_callbacks(callback: types.CallbackQuery):
     await callback.answer()
     
-    parts = callback.data.split("_")
-    action = parts[0]
-    length, width, height = float(parts[1]), float(parts[2]), float(parts[3])
+    data = callback.data
+    if not data:
+        return
 
-    volume_l = int((length * width * height) / 1000)
-    db_increment_calc(callback.from_user, volume_l)
-    exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
+    if data == "check_sub":
+        await process_check_sub(callback)
+        return
 
-    l_m, w_m, h_m = length / 100.0, width / 100.0, height / 100.0
-    area_m2 = (l_m * w_m) + (2 * l_m * h_m) + (2 * w_m * h_m)
-    glass_weight_kg = round(area_m2 * rec * 2.5, 1)
-    total_weight_kg = int(glass_weight_kg + volume_l)
-
-    # Вариант А: Заказчик (Целевой лид)
-    if action == "order":
-        res_text = (
-            f"🛠 **Аквариумная мастерская Reefland**\n\n"
-            f"📐 **Проект аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
-            f"💧 **Объём:** ~{volume_l} л\n\n"
-            f"📊 **Спецификация Reefland:**\n"
-            f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite M1)\n"
-            f"• Рёбра и стяжки: **{bracing_text}**\n"
-            f"• Вес стекла: **~{glass_weight_kg} кг** | С водой: **~{total_weight_kg} кг**\n\n"
-            f"💡 *В стоимость изготовления входит полировка еврокромки, сборка на силикон высокой прочности и проверка геометрии.*"
-        )
-        await callback.message.edit_text(res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
-
-        # Уведомление мастеру
+    if data.startswith("o_") or data.startswith("d_"):
         try:
-            user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
-            await bot.send_message(
-                ADMIN_ID,
-                f"🔥 **НОВАЯ ЗАЯВКА НА ЗАКАЗ!**\n\n"
-                f"Клиент: {callback.from_user.full_name} ({user_info})\n"
-                f"Размеры: {length:.0f}×{width:.0f}×{height:.0f} см ({volume_l} л)\n"
-                f"Толщина стекла: {rec} мм"
-            )
-        except Exception as e:
-            logging.error(f"Не удалось отправить уведомление админу: {e}")
+            parts = data.split("_")
+            action = parts[0]
+            length, width, height = float(parts[1]), float(parts[2]), float(parts[3])
 
-    # Вариант Б: Самодельщик
-    else:
-        res_text = (
-            f"📐 **Базовый расчёт толщины:**\n\n"
-            f"Размеры: {length:.0f} × {width:.0f} × {height:.0f} см\n"
-            f"Минимальная толщина стекла: **{rec} мм**\n\n"
-            f"⚠️ *Примечание: Для самостоятельной сборки учитывайте запас прочности шва, усадку силикона и точность горизонта основания.*"
-        )
-        await callback.message.edit_text(res_text, parse_mode="Markdown")
+            volume_l = int((length * width * height) / 1000)
+            db_increment_calc(callback.from_user, volume_l)
+            exact, rec, bracing_text = calculate_glass_thickness(length, width, height)
+
+            l_m, w_m, h_m = length / 100.0, width / 100.0, height / 100.0
+            area_m2 = (l_m * w_m) + (2 * l_m * h_m) + (2 * w_m * h_m)
+            glass_weight_kg = round(area_m2 * rec * 2.5, 1)
+            total_weight_kg = int(glass_weight_kg + volume_l)
+
+            if action == "o":
+                res_text = (
+                    f"🛠 **Аквариумная мастерская Reefland**\n\n"
+                    f"📐 **Проект аквариума:** {length:.0f} × {width:.0f} × {height:.0f} см\n"
+                    f"💧 **Объём:** ~{volume_l} л\n\n"
+                    f"📊 **Спецификация Reefland:**\n"
+                    f"• Рекомендуемое стекло: **{rec} мм** (Optiwhite M1)\n"
+                    f"• Рёбра и стяжки: **{bracing_text}**\n"
+                    f"• Вес стекла: **~{glass_weight_kg} кг** | С водой: **~{total_weight_kg} кг**\n\n"
+                    f"💡 *В стоимость изготовления входит полировка еврокромки, сборка на силикон высокой прочности и проверка геометрии.*"
+                )
+                await callback.message.edit_text(res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
+
+                try:
+                    user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
+                    await bot.send_message(
+                        ADMIN_ID,
+                        f"🔥 **НОВАЯ ЗАЯВКА НА ЗАКАЗ!**\n\n"
+                        f"Клиент: {callback.from_user.full_name} ({user_info})\n"
+                        f"Размеры: {length:.0f}×{width:.0f}×{height:.0f} см ({volume_l} л)\n"
+                        f"Толщина стекла: {rec} мм"
+                    )
+                except Exception as e:
+                    logging.error(f"Ошибка отправки админу: {e}")
+
+            else:
+                res_text = (
+                    f"📐 **Базовый расчёт толщины:**\n\n"
+                    f"Размеры: {length:.0f} × {width:.0f} × {height:.0f} см\n"
+                    f"Минимальная толщина стекла: **{rec} мм**\n\n"
+                    f"⚠️ *Примечание: Для самостоятельной сборки учитывайте запас прочности шва, усадку силикона и точность горизонта основания.*"
+                )
+                await callback.message.edit_text(res_text, parse_mode="Markdown")
+
+        except Exception as e:
+            logging.error(f"Ошибка при обработке кнопки: {e}")
 
 
 async def on_startup(app: web.Application):
