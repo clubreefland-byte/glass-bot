@@ -80,6 +80,33 @@ def db_increment_calc(user: types.User, volume_l: int):
     except Exception as e:
         logging.error(f"Ошибка инкремента БД: {e}")
 
+def db_get_stats() -> str:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0] or 0
+        
+        cursor.execute("SELECT COUNT(*) FROM calculations")
+        total_calcs = cursor.fetchone()[0] or 0
+        
+        cursor.execute("SELECT AVG(volume_l) FROM calculations")
+        avg_vol_res = cursor.fetchone()[0]
+        avg_vol = int(avg_vol_res) if avg_vol_res else 0
+        
+        conn.close()
+        
+        return (
+            f"📊 <b>Статистика бота Reefland</b>\n\n"
+            f"👤 Уникальных пользователей: <b>{total_users}</b>\n"
+            f"🧮 Выполнено расчетов: <b>{total_calcs}</b>\n"
+            f"💧 Средний объем: <b>~{avg_vol} л</b>"
+        )
+    except Exception as e:
+        logging.error(f"Ошибка чтения статистики: {e}")
+        return "❌ Не удалось получить статистику из базы данных."
+
 async def check_user_subscription(user_id: int) -> bool:
     if not bot:
         return True
@@ -160,6 +187,13 @@ async def cmd_start(message: types.Message):
         return
     await message.answer("🛠 <b>Аквариумная мастерская Reefland</b>\n\nОтправьте размеры: Длина Ширина Высота (см).\nПример: <code>150х60х60</code>", parse_mode="HTML")
 
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    stats_msg = db_get_stats()
+    await message.answer(stats_msg, parse_mode="HTML")
+
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
     await callback.answer()
@@ -198,10 +232,8 @@ async def process_calc_input(message: types.Message):
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
-# Обработка нажатий на инлайн-кнопки
 @dp.callback_query(F.data.startswith("o_") | F.data.startswith("d_"))
 async def process_calc_choice(callback: types.CallbackQuery):
-    # Сразу снимаем задержку "часиков" с кнопки
     await callback.answer()
 
     data = callback.data
