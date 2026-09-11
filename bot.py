@@ -162,8 +162,9 @@ async def cmd_start(message: types.Message):
 
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
+    await callback.answer()
     if await check_user_subscription(callback.from_user.id):
-        await callback.message.edit_text("🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
+        await bot.send_message(chat_id=callback.from_user.id, text="🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
     else:
         await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
 
@@ -197,10 +198,14 @@ async def process_calc_input(message: types.Message):
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
-# Изменение сообщения напрямую в CallbackQuery
+# Обработка нажатий на инлайн-кнопки
 @dp.callback_query(F.data.startswith("o_") | F.data.startswith("d_"))
 async def process_calc_choice(callback: types.CallbackQuery):
+    # Сразу снимаем задержку "часиков" с кнопки
+    await callback.answer()
+
     data = callback.data
+    user_id = callback.from_user.id
 
     try:
         parts = data.split("_")
@@ -229,7 +234,8 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"• Вес стекла: <b>~{glass_weight_kg} кг</b> | С водой: <b>~{total_weight_kg} кг</b>\n\n"
                 f"💡 <i>В стоимость входит полировка еврокромки и сборка на высокопрочный силикон.</i>"
             )
-            await callback.message.edit_text(
+            await bot.send_message(
+                chat_id=user_id,
                 text=res_text,
                 parse_mode="HTML",
                 reply_markup=get_result_keyboard(length, width, height, rec)
@@ -251,7 +257,8 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"Размеры: {length} × {width} × {height} см\n"
                 f"Минимальная толщина стекла: <b>{rec} мм</b>"
             )
-            await callback.message.edit_text(
+            await bot.send_message(
+                chat_id=user_id,
                 text=res_text,
                 parse_mode="HTML"
             )
