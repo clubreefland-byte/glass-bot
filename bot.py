@@ -99,7 +99,6 @@ def get_subscribe_keyboard():
     )
 
 def get_intent_keyboard(l: int, w: int, h: int):
-    # Гарантируем целые числа без точек
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"o_{int(l)}_{int(w)}_{int(h)}")],
@@ -163,14 +162,10 @@ async def cmd_start(message: types.Message):
 
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
-    try: await callback.answer()
-    except Exception: pass
-
     if await check_user_subscription(callback.from_user.id):
-        await bot.send_message(chat_id=callback.from_user.id, text="🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
+        await callback.message.edit_text("🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
     else:
-        try: await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
-        except Exception: pass
+        await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
 
 @dp.message()
 async def process_calc_input(message: types.Message):
@@ -202,14 +197,10 @@ async def process_calc_input(message: types.Message):
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
-# Фильтр перехватывает ЛЮБОЙ callback с "o_" или "d_"
+# Изменение сообщения напрямую в CallbackQuery
 @dp.callback_query(F.data.startswith("o_") | F.data.startswith("d_"))
 async def process_calc_choice(callback: types.CallbackQuery):
-    try: await callback.answer()
-    except Exception: pass
-
     data = callback.data
-    user_id = callback.from_user.id
 
     try:
         parts = data.split("_")
@@ -238,8 +229,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"• Вес стекла: <b>~{glass_weight_kg} кг</b> | С водой: <b>~{total_weight_kg} кг</b>\n\n"
                 f"💡 <i>В стоимость входит полировка еврокромки и сборка на высокопрочный силикон.</i>"
             )
-            await bot.send_message(
-                chat_id=user_id,
+            await callback.message.edit_text(
                 text=res_text,
                 parse_mode="HTML",
                 reply_markup=get_result_keyboard(length, width, height, rec)
@@ -261,8 +251,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"Размеры: {length} × {width} × {height} см\n"
                 f"Минимальная толщина стекла: <b>{rec} мм</b>"
             )
-            await bot.send_message(
-                chat_id=user_id,
+            await callback.message.edit_text(
                 text=res_text,
                 parse_mode="HTML"
             )
