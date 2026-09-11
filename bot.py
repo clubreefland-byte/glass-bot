@@ -187,11 +187,12 @@ async def process_check_sub(callback: types.CallbackQuery):
     db_register_user(callback.from_user)
     
     if await check_user_subscription(user_id):
-        await callback.message.edit_text(
-            "🛠 **Аквариумная мастерская Reefland**\n\n"
-            "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
-            "Отправьте размеры: Длина Ширина Высота (см).\n"
-            "Пример: `150х60х60` или `150 60 60`",
+        await bot.send_message(
+            chat_id=user_id,
+            text="🛠 **Аквариумная мастерская Reefland**\n\n"
+                 "✅ **Спасибо за подписку!** Доступ открыт.\n\n"
+                 "Отправьте размеры: Длина Ширина Высота (см).\n"
+                 "Пример: `150х60х60` или `150 60 60`",
             parse_mode="Markdown"
         )
     else:
@@ -243,6 +244,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
     await callback.answer()
     
     data = callback.data
+    user_id = callback.from_user.id
     try:
         parts = data.split("_")
         action = parts[0]
@@ -268,7 +270,12 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"• Вес стекла: **~{glass_weight_kg} кг** | С водой: **~{total_weight_kg} кг**\n\n"
                 f"💡 *В стоимость изготовления входит полировка еврокромки, сборка на силикон высокой прочности и проверка геометрии.*"
             )
-            await callback.message.edit_text(res_text, parse_mode="Markdown", reply_markup=get_result_keyboard(length, width, height, rec))
+            await bot.send_message(
+                chat_id=user_id,
+                text=res_text,
+                parse_mode="Markdown",
+                reply_markup=get_result_keyboard(length, width, height, rec)
+            )
 
             try:
                 user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
@@ -289,7 +296,11 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 f"Минимальная толщина стекла: **{rec} мм**\n\n"
                 f"⚠️ *Примечание: Для самостоятельной сборки учитывайте запас прочности шва, усадку силикона и точность горизонта основания.*"
             )
-            await callback.message.edit_text(res_text, parse_mode="Markdown")
+            await bot.send_message(
+                chat_id=user_id,
+                text=res_text,
+                parse_mode="Markdown"
+            )
 
     except Exception as e:
         logging.error(f"Ошибка при обработке кнопки: {e}")
