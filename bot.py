@@ -66,7 +66,7 @@ def db_register_user(user: types.User):
         conn.commit()
         conn.close()
     except Exception as e:
-        logging.error(f"Ошибка регистрация БД: {e}")
+        logging.error(f"Ошибка регистрации БД: {e}")
 
 def db_increment_calc(user: types.User, volume_l: int):
     try:
@@ -99,16 +99,16 @@ def get_subscribe_keyboard():
     )
 
 def get_intent_keyboard(l: int, w: int, h: int):
+    # Гарантируем целые числа без точек
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"o_{l}_{w}_{h}")],
-            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data=f"d_{l}_{w}_{h}")]
+            [InlineKeyboardButton(text="🏢 Хочу заказать аквариум в Reefland", callback_data=f"o_{int(l)}_{int(w)}_{int(h)}")],
+            [InlineKeyboardButton(text="🛠 Делаю сам / Сравниваю параметры", callback_data=f"d_{int(l)}_{int(w)}_{int(h)}")]
         ]
     )
 
-def get_result_keyboard(length, width, height, rec):
-    l_int, w_int, h_int, r_int = int(round(length)), int(round(width)), int(round(height)), int(round(rec))
-    calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {l_int}х{w_int}х{h_int}см из стекла {r_int}мм (Optiwhite)."
+def get_result_keyboard(length: int, width: int, height: int, rec: int):
+    calc_text = f"Здравствуйте! Интересует стоимость изготовления аквариума {length}х{width}х{height}см из стекла {rec}мм (Optiwhite)."
     lead_url = f"https://t.me/Asteriy78?text={quote(calc_text)}"
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -163,18 +163,14 @@ async def cmd_start(message: types.Message):
 
 @dp.callback_query(F.data == "check_sub")
 async def process_check_sub(callback: types.CallbackQuery):
-    try:
-        await callback.answer()
-    except Exception:
-        pass
+    try: await callback.answer()
+    except Exception: pass
 
     if await check_user_subscription(callback.from_user.id):
         await bot.send_message(chat_id=callback.from_user.id, text="🛠 <b>Аквариумная мастерская Reefland</b>\n\n✅ Доступ открыт.\nОтправьте размеры: Длина Ширина Высота (см).", parse_mode="HTML")
     else:
-        try:
-            await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
-        except Exception:
-            pass
+        try: await callback.answer("❌ Вы еще не подписались на канал!", show_alert=True)
+        except Exception: pass
 
 @dp.message()
 async def process_calc_input(message: types.Message):
@@ -194,34 +190,33 @@ async def process_calc_input(message: types.Message):
 
     try:
         l, w, h = float(parts[0]), float(parts[1]), float(parts[2])
-        if l > 300 or w > 300 or h > 300: l, w, h = l / 10.0, w / 10.0, h / 10.0
+        if l > 300 or w > 300 or h > 300: 
+            l, w, h = l / 10.0, w / 10.0, h / 10.0
         if l <= 0 or w <= 0 or h <= 0: return
 
         l_int, w_int, h_int = int(round(l)), int(round(w)), int(round(h))
         await message.answer(
-            f"📐 Размеры: <b>{l_int}×{w_int}×{h_int} см</b> (~{int((l*w*h)/1000)} л)\n\nУточните цель расчета:",
+            f"📐 Размеры: <b>{l_int}×{w_int}×{h_int} см</b> (~{int((l_int*w_int*h_int)/1000)} л)\n\nУточните цель расчета:",
             parse_mode="HTML", reply_markup=get_intent_keyboard(l_int, w_int, h_int)
         )
     except ValueError:
         await message.answer("❌ Ошибка ввода. Введите три числа через пробел.")
 
-@dp.callback_query()
+# Фильтр перехватывает ЛЮБОЙ callback с "o_" или "d_"
+@dp.callback_query(F.data.startswith("o_") | F.data.startswith("d_"))
 async def process_calc_choice(callback: types.CallbackQuery):
-    try:
-        await callback.answer()
-    except Exception as e:
-        logging.warning(f"Callback answer error: {e}")
+    try: await callback.answer()
+    except Exception: pass
 
     data = callback.data
     user_id = callback.from_user.id
 
-    if not (data.startswith("o_") or data.startswith("d_")):
-        return
-
     try:
         parts = data.split("_")
         action = parts[0]
-        length, width, height = float(parts[1]), float(parts[2]), float(parts[3])
+        length = int(float(parts[1]))
+        width = int(float(parts[2]))
+        height = int(float(parts[3]))
 
         volume_l = int((length * width * height) / 1000)
         db_increment_calc(callback.from_user, volume_l)
@@ -235,7 +230,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
         if action == "o":
             res_text = (
                 f"🛠 <b>Аквариумная мастерская Reefland</b>\n\n"
-                f"📐 <b>Проект аквариума:</b> {length:.0f} × {width:.0f} × {height:.0f} см\n"
+                f"📐 <b>Проект аквариума:</b> {length} × {width} × {height} см\n"
                 f"💧 <b>Объём:</b> ~{volume_l} л\n\n"
                 f"📊 <b>Спецификация Reefland:</b>\n"
                 f"• Рекомендуемое стекло: <b>{rec} мм</b> (Optiwhite M1)\n"
@@ -254,7 +249,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
                 user_info = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {callback.from_user.id}"
                 await bot.send_message(
                     ADMIN_ID,
-                    f"🔥 <b>ЗАЯВКА!</b>\n\nКлиент: {callback.from_user.full_name} ({user_info})\nРазмеры: {length:.0f}×{width:.0f}×{height:.0f} см",
+                    f"🔥 <b>ЗАЯВКА!</b>\n\nКлиент: {callback.from_user.full_name} ({user_info})\nРазмеры: {length}×{width}×{height} см",
                     parse_mode="HTML"
                 )
             except Exception as e:
@@ -263,7 +258,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
         else:
             res_text = (
                 f"📐 <b>Базовый расчёт толщины:</b>\n\n"
-                f"Размеры: {length:.0f} × {width:.0f} × {height:.0f} см\n"
+                f"Размеры: {length} × {width} × {height} см\n"
                 f"Минимальная толщина стекла: <b>{rec} мм</b>"
             )
             await bot.send_message(
@@ -273,7 +268,7 @@ async def process_calc_choice(callback: types.CallbackQuery):
             )
 
     except Exception as e:
-        logging.error(f"❌ Критическая ошибка в Callback: {e}")
+        logging.error(f"❌ Ошибка в обработчике Callback: {e}")
 
 async def on_startup(app: web.Application):
     if bot and WEBHOOK_URL:
